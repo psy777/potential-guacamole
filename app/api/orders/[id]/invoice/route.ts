@@ -17,7 +17,9 @@ export async function GET(
   const order = getOrder(id);
   if (!order) return new NextResponse("Not found", { status: 404 });
 
-  const pdf = await renderInvoicePdf(order, getSettings());
+  const unpaid = order.amountPaidCents < order.totalCents;
+  const payUrl = unpaid ? order.paymentLinkUrl ?? undefined : undefined;
+  const pdf = await renderInvoicePdf(order, getSettings(), payUrl);
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

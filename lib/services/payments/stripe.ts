@@ -38,7 +38,11 @@ export const stripeProvider: PaymentProvider = {
     });
 
     db.update(orders)
-      .set({ stripeCheckoutId: session.id })
+      .set({
+        stripeCheckoutId: session.id,
+        paymentLinkUrl: session.url ?? null,
+        paymentLinkProvider: "stripe",
+      })
       .where(eq(orders.id, order.id))
       .run();
 

@@ -171,6 +171,9 @@ export const orders = sqliteTable(
     stripeCheckoutId: text("stripe_checkout_id"),
     squarePaymentLinkId: text("square_payment_link_id"),
     squareOrderId: text("square_order_id"),
+    // The customer-facing hosted checkout URL + which provider made it.
+    paymentLinkUrl: text("payment_link_url"),
+    paymentLinkProvider: text("payment_link_provider"),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),

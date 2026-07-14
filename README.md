@@ -47,7 +47,7 @@ Requires **Node 20 or newer**.
 
 ```bash
 npm install
-cp .env.example .env          # set APP_SECRET at minimum
+cp .env.example .env          # optional — every key can be added later
 npm run db:generate           # create SQL migration files from the schema
 npm run build
 npm start                     # http://localhost:3000

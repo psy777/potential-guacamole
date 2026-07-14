@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, or, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
+import { orders, type Order, type Contact } from "@/lib/db/schema";
 import { stripeProvider } from "./stripe";
 import { squareProvider } from "./square";
 import type { PaymentProvider } from "./types";
@@ -16,6 +16,28 @@ export function getProvider(id: string): PaymentProvider | undefined {
 
 export function enabledProviders(): PaymentProvider[] {
   return Object.values(providers).filter((p) => p.isConfigured());
+}
+
+/**
+ * Return the order's existing payment-link URL, or create one with the first
+ * enabled provider. Returns null if no provider is configured or the order has
+ * nothing to charge. Used to embed a "Pay online" link in emails/invoices.
+ */
+export async function ensurePaymentLink(
+  order: Order,
+  contact: Contact | null
+): Promise<string | null> {
+  if (order.paymentLinkUrl) return order.paymentLinkUrl;
+  if (order.totalCents <= 0) return null;
+  const provider = enabledProviders()[0];
+  if (!provider) return null;
+  try {
+    const { url } = await provider.createPaymentLink(order, contact);
+    return url || null;
+  } catch (err) {
+    console.error("[ensurePaymentLink]", (err as Error).message);
+    return null;
+  }
 }
 
 /**

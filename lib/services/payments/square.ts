@@ -58,6 +58,8 @@ export const squareProvider: PaymentProvider = {
       .set({
         squarePaymentLinkId: link.id,
         squareOrderId: link.order_id ?? null,
+        paymentLinkUrl: link.url,
+        paymentLinkProvider: "square",
       })
       .where(eq(orders.id, order.id))
       .run();

@@ -3,6 +3,7 @@ import {
   Page,
   Text,
   View,
+  Link,
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
@@ -60,10 +61,20 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     alignSelf: "flex-start",
   },
+  paySection: { marginTop: 24, padding: 12, backgroundColor: "#f5f6f8", borderRadius: 6 },
+  payLink: { color: "#1d6fb8", fontSize: 10, marginTop: 4 },
   footer: { position: "absolute", bottom: 30, left: 40, right: 40, textAlign: "center", color: "#999", fontSize: 8 },
 });
 
-function InvoiceDoc({ order, settings }: { order: FullOrder; settings: Settings }) {
+function InvoiceDoc({
+  order,
+  settings,
+  payUrl,
+}: {
+  order: FullOrder;
+  settings: Settings;
+  payUrl?: string;
+}) {
   const c = order.contact;
   const fullyPaid = order.totalCents > 0 && order.amountPaidCents >= order.totalCents;
   const brand = settings.brandColor || "#c0392b";
@@ -162,6 +173,15 @@ function InvoiceDoc({ order, settings }: { order: FullOrder; settings: Settings 
 
         {fullyPaid && <Text style={styles.paidStamp}>PAID IN FULL</Text>}
 
+        {!fullyPaid && payUrl && (
+          <View style={styles.paySection}>
+            <Text style={{ fontWeight: "bold" }}>Pay this invoice online</Text>
+            <Link src={payUrl} style={styles.payLink}>
+              {payUrl}
+            </Link>
+          </View>
+        )}
+
         {settings.invoiceFooter ? (
           <Text style={styles.footer}>{settings.invoiceFooter}</Text>
         ) : null}
@@ -172,7 +192,10 @@ function InvoiceDoc({ order, settings }: { order: FullOrder; settings: Settings 
 
 export async function renderInvoicePdf(
   order: FullOrder,
-  settings: Settings
+  settings: Settings,
+  payUrl?: string
 ): Promise<Buffer> {
-  return renderToBuffer(<InvoiceDoc order={order} settings={settings} />);
+  return renderToBuffer(
+    <InvoiceDoc order={order} settings={settings} payUrl={payUrl} />
+  );
 }

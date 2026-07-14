@@ -5,6 +5,8 @@ import { getSettings } from "@/lib/services/settings";
 import { enabledProviders } from "@/lib/services/payments";
 import { formatMoney } from "@/lib/money";
 import { StatusBadge, InlineAction } from "@/components/ui";
+import { CopyableLink } from "@/components/copyable-link";
+import { EmailComposer } from "@/components/email-composer";
 import { docuseal as docusealConfig, email as emailConfig } from "@/lib/config";
 import {
   setStatusAction,
@@ -46,6 +48,7 @@ export default async function OrderDetailPage({
   const fullyPaid =
     order.totalCents > 0 && order.amountPaidCents >= order.totalCents;
   const balanceCents = Math.max(0, order.totalCents - order.amountPaidCents);
+  const defaultEmailBody = `<p>Hi ${order.contact?.contactName || order.contact?.companyName || "there"},</p><p>Please find invoice ${order.number} attached. Let me know if you have any questions.</p><p>Thank you,<br/>${settings.businessName}</p>`;
 
   return (
     <>
@@ -54,8 +57,7 @@ export default async function OrderDetailPage({
       {link && (
         <div className="notice info">
           Payment link created — send this to your customer:
-          <br />
-          <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: "0.4rem" }} />
+          <CopyableLink url={link} />
         </div>
       )}
 
@@ -193,19 +195,18 @@ export default async function OrderDetailPage({
               ))}
             </div>
 
-            <form action={emailInvoiceAction}>
-              <input type="hidden" name="id" value={order.id} />
-              <button
-                type="submit"
-                className="btn secondary btn-sm"
-                disabled={!emailConfig.isConfigured || !order.contact?.email}
-              >
-                Email invoice
-              </button>
-              {!emailConfig.isConfigured && (
-                <span className="small muted"> — set RESEND_API_KEY to enable</span>
-              )}
-            </form>
+            <EmailComposer
+              action={emailInvoiceAction}
+              orderId={order.id}
+              disabled={!emailConfig.isConfigured || !order.contact?.email}
+              emailConfigured={emailConfig.isConfigured}
+              toEmail={order.contact?.email || ""}
+              defaultSubject={`Invoice ${order.number} from ${settings.businessName}`}
+              defaultBody={defaultEmailBody}
+              clientName={order.contact?.contactName || order.contact?.companyName || ""}
+              businessName={order.contact?.companyName || ""}
+              orderNumber={order.number}
+            />
 
             <form action={requestSignatureAction}>
               <input type="hidden" name="id" value={order.id} />

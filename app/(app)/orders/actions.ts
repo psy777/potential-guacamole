@@ -15,7 +15,7 @@ import {
   type OrderInput,
   type LineInput,
 } from "@/lib/services/orders";
-import { getProvider } from "@/lib/services/payments";
+import { getProvider, ensurePaymentLink } from "@/lib/services/payments";
 import { requestSignature } from "@/lib/services/documents/docuseal";
 import { renderInvoicePdf } from "@/lib/services/pdf/invoice";
 import { getSettings } from "@/lib/services/settings";
@@ -129,10 +129,13 @@ export async function paymentLinkAction(fd: FormData) {
   const order = getOrder(id);
   const provider = getProvider(providerId);
   if (!order || !provider) redirect(`/orders/${id}`);
+
+  // Create the link inside try/catch, but call redirect() OUTSIDE it —
+  // redirect() throws a NEXT_REDIRECT signal that a catch would swallow.
+  let url = "";
   try {
-    const { url } = await provider!.createPaymentLink(order!, order!.contact);
-    revalidatePath(`/orders/${id}`);
-    redirect(`/orders/${id}?link=${encodeURIComponent(url)}`);
+    const link = await provider.createPaymentLink(order, order.contact);
+    url = link.url;
   } catch (err) {
     redirect(
       `/orders/${id}?err=${encodeURIComponent(
@@ -140,6 +143,8 @@ export async function paymentLinkAction(fd: FormData) {
       )}`
     );
   }
+  revalidatePath(`/orders/${id}`);
+  redirect(`/orders/${id}?link=${encodeURIComponent(url)}`);
 }
 
 export async function emailInvoiceAction(fd: FormData) {
@@ -151,13 +156,33 @@ export async function emailInvoiceAction(fd: FormData) {
     redirect(`/orders/${id}?err=${encodeURIComponent("This customer has no email address.")}`);
   }
   const settings = getSettings();
-  const pdf = await renderInvoicePdf(order, settings);
+  const fullyPaid =
+    order.totalCents > 0 && order.amountPaidCents >= order.totalCents;
+  // Make sure there's a hosted payment link (creates one if a provider is set).
+  const payUrl = fullyPaid
+    ? null
+    : await ensurePaymentLink(order, order.contact);
+  const pdf = await renderInvoicePdf(order, settings, payUrl ?? undefined);
+
+  const payButton = payUrl
+    ? `<p style="margin:20px 0">
+         <a href="${payUrl}" style="display:inline-block;background:${settings.brandColor};color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">Pay this invoice online</a>
+       </p>`
+    : "";
+
+  const subject =
+    String(fd.get("subject") || "").trim() ||
+    `Invoice ${order.number} from ${settings.businessName}`;
+  const composed = String(fd.get("body") || "").trim();
+  const message =
+    composed ||
+    `<p>Hi ${order.contact!.contactName || order.contact!.companyName},</p>
+     <p>Please find invoice <strong>${order.number}</strong> attached.</p>`;
+
   const result = await sendEmail({
     to: order.contact!.email,
-    subject: `Invoice ${order.number} from ${settings.businessName}`,
-    html: `<p>Hi ${order.contact!.contactName || order.contact!.companyName},</p>
-           <p>Please find invoice <strong>${order.number}</strong> attached.</p>
-           <p>${settings.invoiceFooter}</p>`,
+    subject,
+    html: `${message}${payButton}`,
     attachment: { filename: `${order.number}.pdf`, content: pdf },
   });
   if (order.status === "draft") setOrderStatus(id, "sent", { name: "System" }, "Invoice emailed");

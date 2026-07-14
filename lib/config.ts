@@ -10,10 +10,6 @@ export const DATA_DIR =
 export const DB_PATH = path.join(DATA_DIR, "firecoast.db");
 export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
-// Secret used to sign session cookies / general app secret.
-export const APP_SECRET =
-  process.env.APP_SECRET || "dev-insecure-secret-change-me";
-
 // --- Email (Resend) ---
 export const email = {
   apiKey: process.env.RESEND_API_KEY || "",
