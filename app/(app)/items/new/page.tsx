@@ -1,4 +1,5 @@
 import { ItemForm } from "@/components/item-form";
+import { listCategories } from "@/lib/services/items";
 import { createItemAction } from "../actions";
 
 export default async function NewItemPage({
@@ -10,8 +11,8 @@ export default async function NewItemPage({
   return (
     <>
       <h1>New item</h1>
-      {error && <div className="notice error">Name is required.</div>}
-      <ItemForm action={createItemAction} />
+      {error && <div className="notice error">Item name is required.</div>}
+      <ItemForm action={createItemAction} categories={listCategories()} />
     </>
   );
 }

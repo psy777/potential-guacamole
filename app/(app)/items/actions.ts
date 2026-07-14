@@ -10,16 +10,36 @@ import {
   updateItem,
   deleteItem,
   type ItemInput,
+  type ItemVariationInput,
 } from "@/lib/services/items";
+
+function parseVariations(fd: FormData): ItemVariationInput[] {
+  try {
+    const raw = JSON.parse(String(fd.get("variations") || "[]")) as Array<{
+      name?: string;
+      sku?: string;
+      gtin?: string;
+      price?: string;
+    }>;
+    return raw.map((v) => ({
+      name: String(v.name || "").trim(),
+      sku: String(v.sku || "").trim(),
+      gtin: String(v.gtin || "").trim(),
+      priceCents: dollarsToCents(v.price ?? "0"),
+    }));
+  } catch {
+    return [];
+  }
+}
 
 function parse(fd: FormData): ItemInput {
   return {
     name: String(fd.get("name") || "").trim(),
     description: String(fd.get("description") || "").trim(),
-    sku: String(fd.get("sku") || "").trim(),
-    priceCents: dollarsToCents(String(fd.get("price") || "0")),
-    currency: String(fd.get("currency") || "USD"),
+    category: String(fd.get("category") || "").trim(),
+    currency: String(fd.get("currency") || "USD").toUpperCase(),
     active: fd.get("active") === "on",
+    variations: parseVariations(fd),
   };
 }
 

@@ -110,6 +110,9 @@ export const items = sqliteTable("items", {
   id: id(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  category: text("category").notNull().default(""),
+  // sku/priceCents mirror the FIRST variation, so simple contexts (packages,
+  // "starting at" price) work without joining variations.
   sku: text("sku").notNull().default(""),
   priceCents: integer("price_cents").notNull().default(0),
   currency: text("currency").notNull().default("USD"),
@@ -117,6 +120,25 @@ export const items = sqliteTable("items", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// Square-style variations: one item can have many sellable versions
+// (Small/Medium/Large), each with its own SKU, barcode, and price.
+export const itemVariations = sqliteTable(
+  "item_variations",
+  {
+    id: id(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default("Regular"),
+    sku: text("sku").notNull().default(""),
+    gtin: text("gtin").notNull().default(""), // barcode
+    priceCents: integer("price_cents").notNull().default(0),
+    position: integer("position").notNull().default(0),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+  },
+  (t) => [index("item_variations_item_idx").on(t.itemId)]
+);
 
 export const packages = sqliteTable("packages", {
   id: id(),
@@ -315,6 +337,7 @@ export const counters = sqliteTable("counters", {
 export type User = typeof users.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Item = typeof items.$inferSelect;
+export type ItemVariation = typeof itemVariations.$inferSelect;
 export type Package = typeof packages.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderLineItem = typeof orderLineItems.$inferSelect;

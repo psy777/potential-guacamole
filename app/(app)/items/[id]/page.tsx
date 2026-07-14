@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getItem } from "@/lib/services/items";
+import { getItem, listCategories } from "@/lib/services/items";
 import { ItemForm } from "@/components/item-form";
 import { InlineAction } from "@/components/ui";
 import { updateItemAction, deleteItemAction } from "../actions";
@@ -24,7 +24,7 @@ export default async function EditItemPage({
           className="btn danger btn-sm"
         />
       </div>
-      <ItemForm action={updateItemAction} item={item} />
+      <ItemForm action={updateItemAction} item={item} categories={listCategories()} />
     </>
   );
 }

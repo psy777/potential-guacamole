@@ -165,3 +165,27 @@ input:focus, select:focus, textarea:focus { outline: 2px solid #cfe0f0; border-c
 }
 .editor:focus { outline: 2px solid #cfe0f0; border-color: var(--info); }
 .editor p { margin: 0 0 0.6rem; }
+
+/* Combobox (item search on the order form) */
+.combo-wrap { position: relative; }
+.combo-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(16, 24, 40, 0.16); z-index: 20;
+  max-height: 280px; overflow-y: auto;
+}
+.combo-item {
+  padding: 0.5rem 0.75rem; cursor: pointer;
+  display: flex; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid #f1f3f5;
+}
+.combo-item:last-child { border-bottom: none; }
+.combo-item:hover, .combo-item.active { background: #eef2f7; }
+.combo-item .price { color: var(--muted); font-variant-numeric: tabular-nums; }
+.qty-stepper { display: inline-flex; align-items: center; gap: 0.25rem; }
+.qty-stepper input { width: 52px; text-align: center; }
+.qty-stepper button {
+  width: 28px; height: 30px; border: 1px solid var(--border); background: #fff;
+  border-radius: 6px; cursor: pointer; font-size: 1rem; line-height: 1; color: var(--text);
+}
+.qty-stepper button:hover { background: #eef0f3; }
