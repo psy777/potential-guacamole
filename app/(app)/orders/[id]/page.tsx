@@ -36,10 +36,10 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ link?: string; msg?: string; err?: string }>;
+  searchParams: Promise<{ msg?: string; err?: string }>;
 }) {
   const { id } = await params;
-  const { link, msg, err } = await searchParams;
+  const { msg, err } = await searchParams;
   const order = getOrder(id);
   if (!order) notFound();
 
@@ -54,12 +54,6 @@ export default async function OrderDetailPage({
     <>
       {msg && <div className="notice ok">{msg}</div>}
       {err && <div className="notice error">{err}</div>}
-      {link && (
-        <div className="notice info">
-          Payment link created — send this to your customer:
-          <CopyableLink url={link} />
-        </div>
-      )}
 
       <div className="header-row">
         <h1>
@@ -180,52 +174,84 @@ export default async function OrderDetailPage({
         <div className="card">
           <h2 style={{ marginTop: 0 }}>Send &amp; collect</h2>
           <div className="stack">
-            <div className="actions">
-              {providers.length === 0 && (
-                <span className="small muted">No payment provider configured (see README).</span>
-              )}
-              {providers.map((p) => (
-                <form key={p.id} action={paymentLinkAction}>
-                  <input type="hidden" name="id" value={order.id} />
-                  <input type="hidden" name="provider" value={p.id} />
-                  <button type="submit" className="btn btn-sm" disabled={order.totalCents <= 0}>
-                    {p.id === "stripe" ? "Stripe" : "Square"} payment link
-                  </button>
-                </form>
-              ))}
+            {/* 1) Email the invoice — the primary way to send. */}
+            <div>
+              <EmailComposer
+                action={emailInvoiceAction}
+                orderId={order.id}
+                disabled={!emailConfig.isConfigured || !order.contact?.email}
+                emailConfigured={emailConfig.isConfigured}
+                toEmail={order.contact?.email || ""}
+                defaultSubject={`Invoice ${order.number} from ${settings.businessName}`}
+                defaultBody={defaultEmailBody}
+                clientName={order.contact?.contactName || order.contact?.companyName || ""}
+                businessName={order.contact?.companyName || ""}
+                orderNumber={order.number}
+              />
+              <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
+                Attaches the invoice PDF and includes a &ldquo;Pay online&rdquo; button in the email.
+              </p>
             </div>
 
-            <EmailComposer
-              action={emailInvoiceAction}
-              orderId={order.id}
-              disabled={!emailConfig.isConfigured || !order.contact?.email}
-              emailConfigured={emailConfig.isConfigured}
-              toEmail={order.contact?.email || ""}
-              defaultSubject={`Invoice ${order.number} from ${settings.businessName}`}
-              defaultBody={defaultEmailBody}
-              clientName={order.contact?.contactName || order.contact?.companyName || ""}
-              businessName={order.contact?.companyName || ""}
-              orderNumber={order.number}
-            />
-
-            <form action={requestSignatureAction}>
-              <input type="hidden" name="id" value={order.id} />
-              <label className="small">Request e-signature (DocuSeal)</label>
-              <div className="actions">
-                <input
-                  name="signerEmail"
-                  type="email"
-                  placeholder={order.contact?.email || "signer@email.com"}
-                  style={{ maxWidth: 200 }}
-                />
-                <button type="submit" className="btn secondary btn-sm" disabled={!docusealConfig.isConfigured}>
-                  Send
-                </button>
-              </div>
-              {!docusealConfig.isConfigured && (
-                <span className="small muted">Set DOCUSEAL_API_KEY + DOCUSEAL_TEMPLATE_ID to enable</span>
+            {/* 2) A shareable payment link — the same one embedded in the email. */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem" }}>
+              <label className="small" style={{ marginBottom: "0.35rem" }}>
+                Shareable payment link
+              </label>
+              {fullyPaid ? (
+                <p className="small muted" style={{ margin: 0 }}>This order is paid in full.</p>
+              ) : order.paymentLinkUrl ? (
+                <>
+                  <CopyableLink url={order.paymentLinkUrl} />
+                  <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
+                    {order.paymentLinkProvider === "stripe" ? "Stripe" : "Square"} link — the same
+                    one the emailed invoice uses. Text it or show it as a QR to get paid.
+                  </p>
+                </>
+              ) : providers.length === 0 ? (
+                <p className="small muted" style={{ margin: 0 }}>
+                  No payment provider configured (see README).
+                </p>
+              ) : order.totalCents <= 0 ? (
+                <p className="small muted" style={{ margin: 0 }}>Add line items to create a link.</p>
+              ) : (
+                <div className="actions">
+                  {providers.map((p) => (
+                    <form key={p.id} action={paymentLinkAction}>
+                      <input type="hidden" name="id" value={order.id} />
+                      <input type="hidden" name="provider" value={p.id} />
+                      <button type="submit" className="btn secondary btn-sm">
+                        Create {p.id === "stripe" ? "Stripe" : "Square"} link
+                      </button>
+                    </form>
+                  ))}
+                </div>
               )}
-            </form>
+            </div>
+
+            {/* 3) Request an e-signature. */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem" }}>
+              <form action={requestSignatureAction}>
+                <input type="hidden" name="id" value={order.id} />
+                <label className="small" style={{ marginBottom: "0.35rem" }}>
+                  Request e-signature (DocuSeal)
+                </label>
+                <div className="actions">
+                  <input
+                    name="signerEmail"
+                    type="email"
+                    placeholder={order.contact?.email || "signer@email.com"}
+                    style={{ maxWidth: 200 }}
+                  />
+                  <button type="submit" className="btn secondary btn-sm" disabled={!docusealConfig.isConfigured}>
+                    Send
+                  </button>
+                </div>
+                {!docusealConfig.isConfigured && (
+                  <span className="small muted">Set DOCUSEAL_API_KEY + DOCUSEAL_TEMPLATE_ID to enable</span>
+                )}
+              </form>
+            </div>
           </div>
         </div>
       </div>

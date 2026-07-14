@@ -132,10 +132,9 @@ export async function paymentLinkAction(fd: FormData) {
 
   // Create the link inside try/catch, but call redirect() OUTSIDE it —
   // redirect() throws a NEXT_REDIRECT signal that a catch would swallow.
-  let url = "";
+  // The URL is stored on the order and shown persistently on the page.
   try {
-    const link = await provider.createPaymentLink(order, order.contact);
-    url = link.url;
+    await provider.createPaymentLink(order, order.contact);
   } catch (err) {
     redirect(
       `/orders/${id}?err=${encodeURIComponent(
@@ -144,7 +143,7 @@ export async function paymentLinkAction(fd: FormData) {
     );
   }
   revalidatePath(`/orders/${id}`);
-  redirect(`/orders/${id}?link=${encodeURIComponent(url)}`);
+  redirect(`/orders/${id}?msg=${encodeURIComponent("Payment link created.")}`);
 }
 
 export async function emailInvoiceAction(fd: FormData) {
