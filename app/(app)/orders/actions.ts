@@ -9,13 +9,14 @@ import {
   createOrder,
   updateOrder,
   setOrderStatus,
+  setTracking,
   recordManualPayment,
   deleteOrder,
   getOrder,
   type OrderInput,
   type LineInput,
 } from "@/lib/services/orders";
-import { getProvider, ensurePaymentLink } from "@/lib/services/payments";
+import { ensurePaymentLink, enabledProviders } from "@/lib/services/payments";
 import { requestSignature } from "@/lib/services/documents/docuseal";
 import { renderInvoicePdf } from "@/lib/services/pdf/invoice";
 import { getSettings } from "@/lib/services/settings";
@@ -29,6 +30,8 @@ function parseOrder(fd: FormData): OrderInput {
       itemId?: string | null;
       packageId?: string | null;
       description?: string;
+      variationName?: string;
+      note?: string;
       quantity?: number | string;
       unitPrice?: string;
     }>;
@@ -38,6 +41,8 @@ function parseOrder(fd: FormData): OrderInput {
         itemId: l.itemId || null,
         packageId: l.packageId || null,
         description: String(l.description).trim(),
+        variationName: String(l.variationName ?? "").trim(),
+        note: String(l.note ?? "").trim(),
         quantity: Math.max(1, Number(l.quantity) || 1),
         unitPriceCents: dollarsToCents(l.unitPrice ?? "0"),
       }));
@@ -50,6 +55,10 @@ function parseOrder(fd: FormData): OrderInput {
     contactId: String(fd.get("contactId") || "") || null,
     currency: String(fd.get("currency") || "USD").toUpperCase(),
     notes: String(fd.get("notes") || ""),
+    title: String(fd.get("title") || "").trim(),
+    invoiceId: String(fd.get("invoiceId") || "").trim(),
+    invoiceMessage: String(fd.get("invoiceMessage") || "").trim(),
+    applyProcessingFee: fd.get("applyProcessingFee") === "on",
     dueDate: dueRaw ? new Date(`${dueRaw}T00:00:00`) : null,
     discountCents: dollarsToCents(String(fd.get("discount") || "0")),
     taxCents: dollarsToCents(String(fd.get("tax") || "0")),
@@ -108,6 +117,23 @@ export async function setStatusAction(fd: FormData) {
   redirect(`/orders/${id}?msg=${encodeURIComponent(`Status updated to ${status}.`)}`);
 }
 
+export async function setTrackingAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("id"));
+  const tracking = String(fd.get("tracking") || "").trim();
+  setTracking(id, tracking);
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "order.tracking",
+    entityType: "order",
+    entityId: id,
+    summary: tracking,
+  });
+  revalidatePath(`/orders/${id}`);
+  redirect(`/orders/${id}?msg=${encodeURIComponent("Tracking saved.")}`);
+}
+
 export async function manualPaymentAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
@@ -129,28 +155,25 @@ export async function manualPaymentAction(fd: FormData) {
   revalidatePath(`/orders/${id}`);
 }
 
-export async function paymentLinkAction(fd: FormData) {
+/**
+ * Return a payment link that charges the CURRENT outstanding balance, creating
+ * or regenerating it as needed. Called by the "Copy payment link" button.
+ */
+export async function getPaymentLinkAction(
+  orderId: string
+): Promise<{ url?: string; error?: string }> {
   await requireUser();
-  const id = String(fd.get("id"));
-  const providerId = String(fd.get("provider"));
-  const order = getOrder(id);
-  const provider = getProvider(providerId);
-  if (!order || !provider) redirect(`/orders/${id}`);
-
-  // Create the link inside try/catch, but call redirect() OUTSIDE it —
-  // redirect() throws a NEXT_REDIRECT signal that a catch would swallow.
-  // The URL is stored on the order and shown persistently on the page.
+  const order = getOrder(orderId);
+  if (!order) return { error: "Order not found." };
+  if (!enabledProviders().length) return { error: "No payment provider is configured." };
+  const balanceCents = order.totalCents - order.amountPaidCents;
+  if (balanceCents <= 0) return { error: "This order is already paid in full." };
   try {
-    await provider.createPaymentLink(order, order.contact);
+    const url = await ensurePaymentLink(order, order.contact);
+    return url ? { url } : { error: "Could not create a payment link." };
   } catch (err) {
-    redirect(
-      `/orders/${id}?err=${encodeURIComponent(
-        `${providerId} link failed: ${(err as Error).message}`
-      )}`
-    );
+    return { error: (err as Error).message };
   }
-  revalidatePath(`/orders/${id}`);
-  redirect(`/orders/${id}?msg=${encodeURIComponent("Payment link created.")}`);
 }
 
 export async function emailInvoiceAction(fd: FormData) {

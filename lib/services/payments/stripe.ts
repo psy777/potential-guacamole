@@ -19,7 +19,11 @@ export const stripeProvider: PaymentProvider = {
     return stripeConfig.isConfigured;
   },
 
-  async createPaymentLink(order: Order): Promise<PaymentLink> {
+  async createPaymentLink(
+    order: Order,
+    _contact,
+    amountCents: number
+  ): Promise<PaymentLink> {
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -28,7 +32,7 @@ export const stripeProvider: PaymentProvider = {
           price_data: {
             currency: order.currency.toLowerCase(),
             product_data: { name: `Order ${order.number}` },
-            unit_amount: order.totalCents,
+            unit_amount: amountCents,
           },
         },
       ],
@@ -42,6 +46,7 @@ export const stripeProvider: PaymentProvider = {
         stripeCheckoutId: session.id,
         paymentLinkUrl: session.url ?? null,
         paymentLinkProvider: "stripe",
+        paymentLinkAmountCents: amountCents,
       })
       .where(eq(orders.id, order.id))
       .run();

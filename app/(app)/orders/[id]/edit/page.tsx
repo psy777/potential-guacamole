@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getOrder } from "@/lib/services/orders";
 import { listContacts } from "@/lib/services/contacts";
-import { catalogOptions } from "@/lib/services/catalog";
+import { catalogGroups } from "@/lib/services/catalog";
+import { getSettings } from "@/lib/services/settings";
 import { OrderForm } from "@/components/order-form";
 import { updateOrderAction } from "../../actions";
 
@@ -25,8 +26,9 @@ export default async function EditOrderPage({
       <OrderForm
         action={updateOrderAction}
         contacts={contacts}
-        catalog={catalogOptions()}
+        groups={catalogGroups()}
         order={order}
+        processingFeePercent={getSettings().processingFeePercent}
       />
     </>
   );

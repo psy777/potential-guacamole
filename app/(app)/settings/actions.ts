@@ -17,6 +17,7 @@ export async function updateSettingsAction(fd: FormData) {
     invoiceFooter: s("invoiceFooter"),
     brandColor: s("brandColor") || "#c0392b",
     defaultCurrency: (s("defaultCurrency") || "USD").toUpperCase(),
+    processingFeePercent: Math.max(0, Number(fd.get("processingFeePercent")) || 0),
   });
   await recordAudit({
     userId: user.id,

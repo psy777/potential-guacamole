@@ -36,6 +36,41 @@
       "when": 1784068613550,
       "tag": "0004_broad_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784075393621,
+      "tag": "0005_clear_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784128455811,
+      "tag": "0006_adorable_molecule_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784129185569,
+      "tag": "0007_redundant_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784136483232,
+      "tag": "0008_absent_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784137909943,
+      "tag": "0009_amazing_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

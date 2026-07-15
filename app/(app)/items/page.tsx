@@ -1,21 +1,32 @@
 import Link from "next/link";
 import { listItems, startingPriceCents } from "@/lib/services/items";
 import { formatMoney } from "@/lib/money";
+import { square as squareConfig } from "@/lib/config";
+import { importSquareCatalogAction } from "./actions";
 
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; msg?: string; err?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, msg, err } = await searchParams;
   const items = listItems(q);
 
   return (
     <>
       <div className="header-row">
         <h1>Items</h1>
-        <Link href="/items/new" className="btn">+ New item</Link>
+        <div className="actions">
+          {squareConfig.isConfigured && (
+            <form action={importSquareCatalogAction}>
+              <button type="submit" className="btn secondary">↓ Import from Square</button>
+            </form>
+          )}
+          <Link href="/items/new" className="btn">+ New item</Link>
+        </div>
       </div>
+      {msg && <div className="notice ok">{msg}</div>}
+      {err && <div className="notice error">{err}</div>}
 
       <form className="card" method="get" style={{ padding: "0.75rem 1rem" }}>
         <input name="q" placeholder="Search items, SKUs, categories…" defaultValue={q ?? ""} />

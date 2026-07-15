@@ -5,13 +5,14 @@ import { getSettings } from "@/lib/services/settings";
 import { enabledProviders } from "@/lib/services/payments";
 import { formatMoney } from "@/lib/money";
 import { StatusBadge, InlineAction } from "@/components/ui";
-import { CopyableLink } from "@/components/copyable-link";
+import { CopyPaymentLink } from "@/components/copy-payment-link";
 import { EmailComposer } from "@/components/email-composer";
+import { Toast } from "@/components/toast";
 import { docuseal as docusealConfig, email as emailConfig } from "@/lib/config";
 import {
   setStatusAction,
+  setTrackingAction,
   manualPaymentAction,
-  paymentLinkAction,
   emailInvoiceAction,
   requestSignatureAction,
   deleteOrderAction,
@@ -51,17 +52,26 @@ export default async function OrderDetailPage({
   const fullyPaid =
     order.totalCents > 0 && order.amountPaidCents >= order.totalCents;
   const balanceCents = Math.max(0, order.totalCents - order.amountPaidCents);
-  const defaultEmailBody = `<p>Hi ${order.contact?.contactName || order.contact?.companyName || "there"},</p><p>Please find invoice ${order.number} attached. Let me know if you have any questions.</p><p>Thank you,<br/>${settings.businessName}</p>`;
+  const displayTitle = order.title || `${order.contact?.companyName ?? "Unnamed"}'s Order`;
+  const invoiceLabel = order.invoiceId || order.number.replace(/^ORD-/, "");
+  const transitions = NEXT_STATUS[order.status] ?? [];
+  const nextStatus =
+    transitions.find((t) => t.status !== "cancelled")?.status ?? order.status;
+  const greeting = order.contact?.contactName || order.contact?.companyName || "there";
+  const defaultEmailBody = order.invoiceMessage
+    ? `<p>Hi ${greeting},</p><p>${order.invoiceMessage}</p><p>Please find invoice ${order.number} attached.</p>`
+    : `<p>Hi ${greeting},</p><p>Please find invoice ${order.number} attached. Let me know if you have any questions.</p><p>Thank you,<br/>${settings.businessName}</p>`;
 
   return (
     <>
-      {msg && <div className="notice ok">{msg}</div>}
-      {err && <div className="notice error">{err}</div>}
+      <Toast message={msg} type="ok" />
+      <Toast message={err} type="error" />
 
       <div className="header-row">
-        <h1>
-          {order.number} <StatusBadge status={order.status} />
-        </h1>
+        <div>
+          <h1 style={{ marginBottom: "0.15rem" }}>{displayTitle}</h1>
+          <span className="small muted">Invoice #{invoiceLabel}</span>
+        </div>
         <div className="actions">
           <a href={`/api/orders/${order.id}/invoice`} className="btn secondary btn-sm" target="_blank">
             Download invoice
@@ -91,29 +101,21 @@ export default async function OrderDetailPage({
         </p>
       )}
 
-      <div className="card" style={{ padding: "0.75rem 1rem" }}>
-        <div
-          className="actions"
-          style={{ justifyContent: "space-between", gap: "1rem" }}
-        >
-          <div className="actions">
-            {(NEXT_STATUS[order.status] ?? []).map((t) => (
-              <form key={t.status} action={setStatusAction}>
-                <input type="hidden" name="id" value={order.id} />
-                <input type="hidden" name="status" value={t.status} />
-                <button type="submit" className="btn secondary btn-sm">{t.label}</button>
-              </form>
-            ))}
+      <div className="card" style={{ padding: "0.9rem 1.1rem" }}>
+        <div className="status-bar">
+          <div className="status-left">
+            <span className="small muted" style={{ textTransform: "uppercase", letterSpacing: ".05em" }}>Status</span>
+            <StatusBadge status={order.status} />
           </div>
-          <form action={setStatusAction} className="actions" style={{ gap: "0.4rem" }}>
+          <form action={setStatusAction} className="status-right">
             <input type="hidden" name="id" value={order.id} />
-            <label className="small muted" style={{ margin: 0 }}>Set status</label>
-            <select name="status" defaultValue={order.status} style={{ width: "auto" }}>
+            <label className="small muted" style={{ margin: 0 }}>Set</label>
+            <select name="status" defaultValue={nextStatus} style={{ width: "auto" }}>
               {ALL_STATUSES.map((s) => (
                 <option key={s} value={s}>{titleCase(s)}</option>
               ))}
             </select>
-            <button type="submit" className="btn ghost btn-sm">Update</button>
+            <button type="submit" className="btn secondary btn-sm">Update</button>
           </form>
         </div>
       </div>
@@ -142,9 +144,16 @@ export default async function OrderDetailPage({
             {order.discountCents > 0 && <Row label="Discount" value={`-${formatMoney(order.discountCents, order.currency)}`} />}
             {order.taxCents > 0 && <Row label="Tax" value={formatMoney(order.taxCents, order.currency)} />}
             {order.shippingCents > 0 && <Row label="Shipping" value={formatMoney(order.shippingCents, order.currency)} />}
+            {order.processingFeeCents > 0 && <Row label="Card processing fee" value={formatMoney(order.processingFeeCents, order.currency)} />}
             <Row label="Total" value={formatMoney(order.totalCents, order.currency)} strong />
             <Row label="Paid" value={formatMoney(order.amountPaidCents, order.currency)} />
             <Row label="Balance" value={formatMoney(balanceCents, order.currency)} strong />
+            {order.squareProcessingFeeCents != null && (
+              <div className="small muted" style={{ marginTop: "0.3rem" }}>
+                Square&apos;s actual fee on payment:{" "}
+                {formatMoney(order.squareProcessingFeeCents, order.currency)}
+              </div>
+            )}
           </div>
           {fullyPaid && <div className="notice ok" style={{ marginTop: "0.75rem", marginBottom: 0 }}>Paid in full ✓</div>}
         </div>
@@ -164,7 +173,11 @@ export default async function OrderDetailPage({
           <tbody>
             {order.lines.map((l) => (
               <tr key={l.id}>
-                <td>{l.description}</td>
+                <td>
+                  {l.description}
+                  {l.variationName && <div className="small muted">{l.variationName}</div>}
+                  {l.note && <div className="small muted" style={{ fontStyle: "italic" }}>{l.note}</div>}
+                </td>
                 <td className="right num">{l.quantity}</td>
                 <td className="right num">{formatMoney(l.unitPriceCents, order.currency)}</td>
                 <td className="right num">{formatMoney(l.lineTotalCents, order.currency)}</td>
@@ -172,6 +185,43 @@ export default async function OrderDetailPage({
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="card">
+        <h2 style={{ marginTop: 0 }}>Shipping</h2>
+        <div className="grid2">
+          <div>
+            <label className="small muted" style={{ display: "block", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: ".05em" }}>Ship to</label>
+            {order.contact && (order.contact.shippingAddress || order.contact.shippingCity) ? (
+              <div className="small">
+                <div>{order.contact.shippingAddress}</div>
+                <div className="muted">
+                  {[order.contact.shippingCity, order.contact.shippingState, order.contact.shippingZip].filter(Boolean).join(", ")}
+                </div>
+              </div>
+            ) : (
+              <div className="small muted">—</div>
+            )}
+          </div>
+          <div>
+            <label className="small muted" style={{ display: "block", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: ".05em" }}>UPS tracking</label>
+            <form action={setTrackingAction} className="actions" style={{ gap: "0.4rem" }}>
+              <input type="hidden" name="id" value={order.id} />
+              <input name="tracking" defaultValue={order.trackingNumber} placeholder="1Z…" style={{ maxWidth: 200 }} />
+              <button type="submit" className="btn ghost btn-sm">Save</button>
+            </form>
+            {order.trackingNumber && (
+              <a
+                href={`https://www.ups.com/track?tracknum=${encodeURIComponent(order.trackingNumber)}`}
+                target="_blank"
+                className="small"
+                style={{ display: "inline-block", marginTop: "0.4rem" }}
+              >
+                Track on UPS ↗
+              </a>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid2">
@@ -194,6 +244,31 @@ export default async function OrderDetailPage({
               </tbody>
             </table>
           )}
+
+          <div style={{ marginTop: "1rem", paddingTop: "0.9rem", borderTop: "1px solid var(--border)" }}>
+            {balanceCents > 0 ? (
+              <>
+                <div className="small" style={{ marginBottom: "0.5rem" }}>
+                  Balance due <strong className="num">{formatMoney(balanceCents, order.currency)}</strong>
+                </div>
+                {providers.length > 0 ? (
+                  <>
+                    <CopyPaymentLink orderId={order.id} />
+                    <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
+                      Charges the current balance — always up to date. Text it or show it as a QR.
+                    </p>
+                  </>
+                ) : (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    Configure Square or Stripe to collect online (see README).
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="notice ok" style={{ margin: 0 }}>Paid in full ✓</div>
+            )}
+          </div>
+
           <form action={manualPaymentAction} style={{ marginTop: "1rem" }}>
             <input type="hidden" name="id" value={order.id} />
             <label className="small">Record a manual payment (cash, check, etc.)</label>
@@ -206,9 +281,8 @@ export default async function OrderDetailPage({
         </div>
 
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Send &amp; collect</h2>
+          <h2 style={{ marginTop: 0 }}>Send invoice</h2>
           <div className="stack">
-            {/* 1) Email the invoice — the primary way to send. */}
             <div>
               <EmailComposer
                 action={emailInvoiceAction}
@@ -223,69 +297,29 @@ export default async function OrderDetailPage({
                 orderNumber={order.number}
               />
               <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
-                Attaches the invoice PDF and includes a &ldquo;Pay online&rdquo; button in the email.
+                Attaches the invoice PDF and includes a &ldquo;Pay online&rdquo; button for the balance due.
               </p>
             </div>
 
-            {/* 2) A shareable payment link — the same one embedded in the email. */}
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem" }}>
-              <label className="small" style={{ marginBottom: "0.35rem" }}>
-                Shareable payment link
-              </label>
-              {fullyPaid ? (
-                <p className="small muted" style={{ margin: 0 }}>This order is paid in full.</p>
-              ) : order.paymentLinkUrl ? (
-                <>
-                  <CopyableLink url={order.paymentLinkUrl} />
-                  <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
-                    {order.paymentLinkProvider === "stripe" ? "Stripe" : "Square"} link — the same
-                    one the emailed invoice uses. Text it or show it as a QR to get paid.
-                  </p>
-                </>
-              ) : providers.length === 0 ? (
-                <p className="small muted" style={{ margin: 0 }}>
-                  No payment provider configured (see README).
-                </p>
-              ) : order.totalCents <= 0 ? (
-                <p className="small muted" style={{ margin: 0 }}>Add line items to create a link.</p>
-              ) : (
-                <div className="actions">
-                  {providers.map((p) => (
-                    <form key={p.id} action={paymentLinkAction}>
-                      <input type="hidden" name="id" value={order.id} />
-                      <input type="hidden" name="provider" value={p.id} />
-                      <button type="submit" className="btn secondary btn-sm">
-                        Create {p.id === "stripe" ? "Stripe" : "Square"} link
-                      </button>
-                    </form>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 3) Request an e-signature. */}
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem" }}>
-              <form action={requestSignatureAction}>
-                <input type="hidden" name="id" value={order.id} />
-                <label className="small" style={{ marginBottom: "0.35rem" }}>
-                  Request e-signature (DocuSeal)
-                </label>
-                <div className="actions">
-                  <input
-                    name="signerEmail"
-                    type="email"
-                    placeholder={order.contact?.email || "signer@email.com"}
-                    style={{ maxWidth: 200 }}
-                  />
-                  <button type="submit" className="btn secondary btn-sm" disabled={!docusealConfig.isConfigured}>
-                    Send
-                  </button>
-                </div>
-                {!docusealConfig.isConfigured && (
-                  <span className="small muted">Set DOCUSEAL_API_KEY + DOCUSEAL_TEMPLATE_ID to enable</span>
-                )}
-              </form>
-            </div>
+            {docusealConfig.isConfigured && (
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem" }}>
+                <form action={requestSignatureAction}>
+                  <input type="hidden" name="id" value={order.id} />
+                  <label className="small" style={{ marginBottom: "0.35rem" }}>
+                    Request e-signature (DocuSeal)
+                  </label>
+                  <div className="actions">
+                    <input
+                      name="signerEmail"
+                      type="email"
+                      placeholder={order.contact?.email || "signer@email.com"}
+                      style={{ maxWidth: 200 }}
+                    />
+                    <button type="submit" className="btn secondary btn-sm">Send</button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -314,10 +348,20 @@ export default async function OrderDetailPage({
         </div>
       )}
 
-      {order.notes && (
+      {(order.invoiceMessage || order.notes) && (
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Notes</h2>
-          <p style={{ whiteSpace: "pre-wrap" }}>{order.notes}</p>
+          {order.invoiceMessage && (
+            <>
+              <h2 style={{ marginTop: 0 }}>Message on invoice</h2>
+              <p style={{ whiteSpace: "pre-wrap" }}>{order.invoiceMessage}</p>
+            </>
+          )}
+          {order.notes && (
+            <>
+              <h2 style={order.invoiceMessage ? {} : { marginTop: 0 }}>Internal notes</h2>
+              <p style={{ whiteSpace: "pre-wrap" }}>{order.notes}</p>
+            </>
+          )}
         </div>
       )}
 

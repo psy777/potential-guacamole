@@ -64,6 +64,10 @@ const styles = StyleSheet.create({
   paySection: { marginTop: 24, padding: 12, backgroundColor: "#f5f6f8", borderRadius: 6 },
   payLink: { color: "#1d6fb8", fontSize: 10, marginTop: 4 },
   footer: { position: "absolute", bottom: 30, left: 40, right: 40, textAlign: "center", color: "#999", fontSize: 8 },
+  invoiceTitle: { fontSize: 12, fontWeight: "bold", marginBottom: 12 },
+  lineSub: { color: "#555", fontSize: 9, marginTop: 1 },
+  lineNote: { color: "#888", fontSize: 8, fontStyle: "italic", marginTop: 1 },
+  messageBox: { marginTop: 20, padding: 10, backgroundColor: "#f5f6f8", borderRadius: 4, fontSize: 10 },
 });
 
 function InvoiceDoc({
@@ -98,12 +102,17 @@ function InvoiceDoc({
           </View>
           <View>
             <Text style={styles.title}>INVOICE</Text>
-            <Text style={{ textAlign: "right" }}>{order.number}</Text>
+            {order.invoiceId ? (
+              <Text style={{ textAlign: "right" }}>#{order.invoiceId}</Text>
+            ) : null}
+            <Text style={[styles.muted, { textAlign: "right" }]}>{order.number}</Text>
             <Text style={[styles.muted, { textAlign: "right" }]}>
               {new Date(order.createdAt).toLocaleDateString("en-US")}
             </Text>
           </View>
         </View>
+
+        {order.title ? <Text style={styles.invoiceTitle}>{order.title}</Text> : null}
 
         <View style={styles.section}>
           <Text style={styles.label}>Bill To</Text>
@@ -125,7 +134,11 @@ function InvoiceDoc({
         </View>
         {order.lines.map((l) => (
           <View style={styles.tableRow} key={l.id}>
-            <Text style={styles.colDesc}>{l.description}</Text>
+            <View style={styles.colDesc}>
+              <Text>{l.description}</Text>
+              {l.variationName ? <Text style={styles.lineSub}>{l.variationName}</Text> : null}
+              {l.note ? <Text style={styles.lineNote}>{l.note}</Text> : null}
+            </View>
             <Text style={styles.colQty}>{l.quantity}</Text>
             <Text style={styles.colUnit}>
               {formatMoney(l.unitPriceCents, order.currency)}
@@ -159,15 +172,27 @@ function InvoiceDoc({
               <Text>{formatMoney(order.shippingCents, order.currency)}</Text>
             </View>
           )}
+          {order.processingFeeCents > 0 && (
+            <View style={styles.totalRow}>
+              <Text>Card processing fee</Text>
+              <Text>{formatMoney(order.processingFeeCents, order.currency)}</Text>
+            </View>
+          )}
           <View style={styles.grandTotal}>
             <Text>Total</Text>
             <Text>{formatMoney(order.totalCents, order.currency)}</Text>
           </View>
           {order.amountPaidCents > 0 && !fullyPaid && (
-            <View style={styles.totalRow}>
-              <Text>Paid</Text>
-              <Text>-{formatMoney(order.amountPaidCents, order.currency)}</Text>
-            </View>
+            <>
+              <View style={styles.totalRow}>
+                <Text>Paid</Text>
+                <Text>-{formatMoney(order.amountPaidCents, order.currency)}</Text>
+              </View>
+              <View style={styles.grandTotal}>
+                <Text>Balance due</Text>
+                <Text>{formatMoney(order.totalCents - order.amountPaidCents, order.currency)}</Text>
+              </View>
+            </>
           )}
         </View>
 
@@ -181,6 +206,12 @@ function InvoiceDoc({
             </Link>
           </View>
         )}
+
+        {order.invoiceMessage ? (
+          <View style={styles.messageBox}>
+            <Text>{order.invoiceMessage}</Text>
+          </View>
+        ) : null}
 
         {settings.invoiceFooter ? (
           <Text style={styles.footer}>{settings.invoiceFooter}</Text>

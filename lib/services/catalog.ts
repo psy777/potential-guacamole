@@ -1,56 +1,73 @@
 import { listItems } from "@/lib/services/items";
 import { listPackages, packagePriceCents } from "@/lib/services/packages";
 
-export type CatalogOption = {
-  // Unique per option (an item can appear once per variation) — use for keys.
-  value: string;
+/** One selectable thing (a specific variation, a no-variation item, or a package). */
+export type CatalogPick = {
+  value: string; // unique — used as the line's catalog key
   kind: "item" | "package";
-  id: string; // the item or package id
+  id: string; // item or package id
   variationId?: string;
-  name: string;
+  itemName: string;
+  variationName: string; // "" when the item has no variations / is a package
   priceCents: number;
 };
 
-/**
- * Combined, order-form-ready list. Each item variation becomes its own
- * sellable option (e.g. "T-Shirt — Large"), so picking from the catalog gives
- * the right price. Packages are listed too.
- */
-export function catalogOptions(): CatalogOption[] {
-  const itemOptions: CatalogOption[] = [];
-  for (const item of listItems().filter((i) => i.active)) {
-    const variations = item.variations.filter((v) => v.active);
-    if (variations.length === 0) {
-      itemOptions.push({
-        value: `item:${item.id}`,
-        kind: "item",
-        id: item.id,
-        name: item.name,
-        priceCents: item.priceCents,
-      });
-      continue;
-    }
-    for (const v of variations) {
-      itemOptions.push({
-        value: `item:${item.id}:${v.id}`,
-        kind: "item",
-        id: item.id,
-        variationId: v.id,
-        name: variations.length > 1 ? `${item.name} — ${v.name}` : item.name,
-        priceCents: v.priceCents,
-      });
-    }
-  }
+/** An item (or package) grouped with its variations, for the order picker. */
+export type CatalogGroup = {
+  key: string;
+  kind: "item" | "package";
+  id: string;
+  name: string;
+  picks: CatalogPick[];
+};
 
-  const pkgOptions: CatalogOption[] = listPackages()
+export function catalogGroups(): CatalogGroup[] {
+  const itemGroups: CatalogGroup[] = listItems()
+    .filter((i) => i.active)
+    .map((item) => {
+      const variations = item.variations.filter((v) => v.active);
+      const picks: CatalogPick[] =
+        variations.length === 0
+          ? [
+              {
+                value: `item:${item.id}`,
+                kind: "item",
+                id: item.id,
+                itemName: item.name,
+                variationName: "",
+                priceCents: item.priceCents,
+              },
+            ]
+          : variations.map((v) => ({
+              value: `item:${item.id}:${v.id}`,
+              kind: "item",
+              id: item.id,
+              variationId: v.id,
+              itemName: item.name,
+              variationName: v.name,
+              priceCents: v.priceCents,
+            }));
+      return { key: `item:${item.id}`, kind: "item", id: item.id, name: item.name, picks };
+    });
+
+  const pkgGroups: CatalogGroup[] = listPackages()
     .filter((p) => p.active)
     .map((p) => ({
-      value: `package:${p.id}`,
-      kind: "package" as const,
+      key: `package:${p.id}`,
+      kind: "package",
       id: p.id,
       name: p.name,
-      priceCents: packagePriceCents(p),
+      picks: [
+        {
+          value: `package:${p.id}`,
+          kind: "package",
+          id: p.id,
+          itemName: p.name,
+          variationName: "",
+          priceCents: packagePriceCents(p),
+        },
+      ],
     }));
 
-  return [...itemOptions, ...pkgOptions];
+  return [...itemGroups, ...pkgGroups];
 }

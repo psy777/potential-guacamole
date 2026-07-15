@@ -9,8 +9,12 @@ export type PaymentLink = { url: string; providerRef: string };
 export interface PaymentProvider {
   readonly id: "stripe" | "square";
   isConfigured(): boolean;
-  /** Create a hosted checkout/payment link for an order. */
-  createPaymentLink(order: Order, contact: Contact | null): Promise<PaymentLink>;
+  /** Create a hosted checkout/payment link charging `amountCents` (the balance). */
+  createPaymentLink(
+    order: Order,
+    contact: Contact | null,
+    amountCents: number
+  ): Promise<PaymentLink>;
   /** Poll the provider and record any payments found against this order. */
   syncOrder(order: Order): Promise<void>;
 }

@@ -27,12 +27,17 @@ export async function ensurePaymentLink(
   order: Order,
   contact: Contact | null
 ): Promise<string | null> {
-  if (order.paymentLinkUrl) return order.paymentLinkUrl;
-  if (order.totalCents <= 0) return null;
+  // Always charge the outstanding balance, and reuse the stored link only if it
+  // was made for exactly this amount — otherwise mint a fresh, correct one.
+  const balanceCents = order.totalCents - order.amountPaidCents;
+  if (balanceCents <= 0) return null;
+  if (order.paymentLinkUrl && order.paymentLinkAmountCents === balanceCents) {
+    return order.paymentLinkUrl;
+  }
   const provider = enabledProviders()[0];
   if (!provider) return null;
   try {
-    const { url } = await provider.createPaymentLink(order, contact);
+    const { url } = await provider.createPaymentLink(order, contact, balanceCents);
     return url || null;
   } catch (err) {
     console.error("[ensurePaymentLink]", (err as Error).message);

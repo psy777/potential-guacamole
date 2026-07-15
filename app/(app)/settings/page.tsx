@@ -68,6 +68,19 @@ export default async function SettingsPage({
             <input id="defaultCurrency" name="defaultCurrency" defaultValue={s.defaultCurrency} />
           </div>
         </div>
+        <div className="field">
+          <label htmlFor="processingFeePercent">
+            Card processing fee % (passed to customers when enabled on an order; 0 = off)
+          </label>
+          <input
+            id="processingFeePercent"
+            name="processingFeePercent"
+            inputMode="decimal"
+            defaultValue={String(s.processingFeePercent)}
+            placeholder="3.4"
+            style={{ maxWidth: 160 }}
+          />
+        </div>
         <button type="submit" className="btn">Save settings</button>
       </form>
 

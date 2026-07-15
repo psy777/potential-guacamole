@@ -4,6 +4,7 @@ import {
   sqliteTable,
   text,
   integer,
+  real,
   index,
   unique,
 } from "drizzle-orm/sqlite-core";
@@ -75,6 +76,8 @@ export const settings = sqliteTable("settings", {
   invoiceFooter: text("invoice_footer").notNull().default("Thank you for your business!"),
   brandColor: text("brand_color").notNull().default("#c0392b"),
   defaultCurrency: text("default_currency").notNull().default("USD"),
+  // Card-processing surcharge rate passed to customers (e.g. 3.4). 0 = off.
+  processingFeePercent: real("processing_fee_percent").notNull().default(0),
   updatedAt: updatedAt(),
 });
 
@@ -117,9 +120,11 @@ export const items = sqliteTable("items", {
   priceCents: integer("price_cents").notNull().default(0),
   currency: text("currency").notNull().default("USD"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Links this item to a Square catalog object (set when imported from Square).
+  squareCatalogId: text("square_catalog_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [unique("items_square_uq").on(t.squareCatalogId)]);
 
 // Square-style variations: one item can have many sellable versions
 // (Small/Medium/Large), each with its own SKU, barcode, and price.
@@ -136,6 +141,7 @@ export const itemVariations = sqliteTable(
     priceCents: integer("price_cents").notNull().default(0),
     position: integer("position").notNull().default(0),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
+    squareVariationId: text("square_variation_id"),
   },
   (t) => [index("item_variations_item_idx").on(t.itemId)]
 );
@@ -170,7 +176,8 @@ export const orders = sqliteTable(
   "orders",
   {
     id: id(),
-    number: text("number").notNull().unique(), // human-friendly, e.g. "ORD-1007"
+    number: text("number").notNull().unique(), // internal order number, e.g. "ORD-1007"
+    invoiceId: text("invoice_id").notNull().default(""), // customer-facing, incrementing
     contactId: text("contact_id").references(() => contacts.id, {
       onDelete: "set null",
     }),
@@ -191,15 +198,29 @@ export const orders = sqliteTable(
     // Cached sum of succeeded payments; "paid in full" == amountPaid >= total.
     amountPaidCents: integer("amount_paid_cents").notNull().default(0),
     notes: text("notes").notNull().default(""),
+    // Invoice presentation + a message printed on the invoice PDF.
+    title: text("title").notNull().default(""),
+    invoiceMessage: text("invoice_message").notNull().default(""),
+    // Card-processing surcharge: whether to add it, and the computed amount.
+    applyProcessingFee: integer("apply_processing_fee", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    processingFeeCents: integer("processing_fee_cents").notNull().default(0),
+    // The ACTUAL fee Square charged, read back after the payment settles.
+    squareProcessingFeeCents: integer("square_processing_fee_cents"),
     // Optional promised/due date — the axis the production dashboard sorts on.
     dueDate: integer("due_date", { mode: "timestamp_ms" }),
+    // UPS tracking number (entered manually, or filled by the UPS sync).
+    trackingNumber: text("tracking_number").notNull().default(""),
     // External references for reconciliation.
     stripeCheckoutId: text("stripe_checkout_id"),
     squarePaymentLinkId: text("square_payment_link_id"),
     squareOrderId: text("square_order_id"),
-    // The customer-facing hosted checkout URL + which provider made it.
+    // The customer-facing hosted checkout URL, which provider made it, and the
+    // amount it charges — so a stale link (amount changed) can be regenerated.
     paymentLinkUrl: text("payment_link_url"),
     paymentLinkProvider: text("payment_link_provider"),
+    paymentLinkAmountCents: integer("payment_link_amount_cents"),
     createdBy: text("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -220,6 +241,8 @@ export const orderLineItems = sqliteTable(
     itemId: text("item_id"),
     packageId: text("package_id"),
     description: text("description").notNull(),
+    variationName: text("variation_name").notNull().default(""),
+    note: text("note").notNull().default(""),
     quantity: integer("quantity").notNull().default(1),
     unitPriceCents: integer("unit_price_cents").notNull().default(0),
     lineTotalCents: integer("line_total_cents").notNull().default(0),

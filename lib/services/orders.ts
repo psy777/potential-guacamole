@@ -1,5 +1,6 @@
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { getSettings } from "@/lib/services/settings";
 import {
   orders,
   orderLineItems,
@@ -19,6 +20,8 @@ export type LineInput = {
   itemId?: string | null;
   packageId?: string | null;
   description: string;
+  variationName: string;
+  note: string;
   quantity: number;
   unitPriceCents: number;
 };
@@ -27,6 +30,10 @@ export type OrderInput = {
   contactId?: string | null;
   currency: string;
   notes: string;
+  title: string;
+  invoiceId: string;
+  invoiceMessage: string;
+  applyProcessingFee: boolean;
   dueDate: Date | null;
   discountCents: number;
   taxCents: number;
@@ -39,6 +46,7 @@ export type OrderTotals = {
   discountCents: number;
   taxCents: number;
   shippingCents: number;
+  processingFeeCents: number;
   totalCents: number;
 };
 
@@ -50,28 +58,42 @@ export type FullOrder = Order & {
   history: (typeof orderStatusHistory.$inferSelect)[];
 };
 
-/** Pure function: compute all totals from an order input. Integer cents only. */
-export function computeTotals(input: OrderInput): OrderTotals {
+/**
+ * Pure function: compute all totals from an order input. Integer cents only.
+ * The processing fee is a % surcharge on the pre-fee total, applied only when
+ * the order opts in and a rate is configured.
+ */
+export function computeTotals(
+  input: OrderInput,
+  processingFeePercent = 0
+): OrderTotals {
   const subtotalCents = input.lines.reduce(
     (sum, l) => sum + Math.round(l.unitPriceCents) * Math.round(l.quantity),
     0
   );
-  const totalCents = Math.max(
+  const preFeeCents = Math.max(
     0,
     subtotalCents - input.discountCents + input.taxCents + input.shippingCents
   );
+  const processingFeeCents =
+    input.applyProcessingFee && processingFeePercent > 0
+      ? Math.round((preFeeCents * processingFeePercent) / 100)
+      : 0;
   return {
     subtotalCents,
     discountCents: input.discountCents,
     taxCents: input.taxCents,
     shippingCents: input.shippingCents,
-    totalCents,
+    processingFeeCents,
+    totalCents: preFeeCents + processingFeeCents,
   };
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-function nextOrderNumber(tx: Tx): string {
+// One incrementing sequence feeds BOTH the internal order number (ORD-N) and
+// the customer-facing invoice ID, so they always share the same number.
+function nextSeq(tx: Tx): number {
   tx.insert(counters)
     .values({ name: "order", value: 1000 })
     .onConflictDoNothing()
@@ -85,7 +107,17 @@ function nextOrderNumber(tx: Tx): string {
     .from(counters)
     .where(eq(counters.name, "order"))
     .get();
-  return `ORD-${row?.value ?? 1001}`;
+  return row?.value ?? 1001;
+}
+
+/** The number a new order WOULD get, without consuming it (for prefill). */
+export function peekNextInvoiceId(): string {
+  const row = db
+    .select()
+    .from(counters)
+    .where(eq(counters.name, "order"))
+    .get();
+  return String((row?.value ?? 1000) + 1);
 }
 
 export function listOrders(opts?: {
@@ -148,13 +180,16 @@ export function createOrder(
   input: OrderInput,
   user: { id: string; name: string }
 ): string {
-  const totals = computeTotals(input);
+  const totals = computeTotals(input, getSettings().processingFeePercent);
   return db.transaction((tx) => {
-    const number = nextOrderNumber(tx);
+    const seq = nextSeq(tx);
+    const number = `ORD-${seq}`;
+    const invoiceId = input.invoiceId.trim() || String(seq);
     const order = tx
       .insert(orders)
       .values({
         number,
+        invoiceId,
         contactId: input.contactId ?? null,
         status: "open",
         currency: input.currency,
@@ -162,8 +197,12 @@ export function createOrder(
         discountCents: totals.discountCents,
         taxCents: totals.taxCents,
         shippingCents: totals.shippingCents,
+        processingFeeCents: totals.processingFeeCents,
         totalCents: totals.totalCents,
         notes: input.notes,
+        title: input.title,
+        invoiceMessage: input.invoiceMessage,
+        applyProcessingFee: input.applyProcessingFee,
         dueDate: input.dueDate ?? null,
         createdBy: user.id,
       })
@@ -177,6 +216,8 @@ export function createOrder(
           itemId: l.itemId ?? null,
           packageId: l.packageId ?? null,
           description: l.description,
+          variationName: l.variationName ?? "",
+          note: l.note ?? "",
           quantity: Math.round(l.quantity),
           unitPriceCents: Math.round(l.unitPriceCents),
           lineTotalCents: Math.round(l.unitPriceCents) * Math.round(l.quantity),
@@ -199,18 +240,34 @@ export function createOrder(
 }
 
 export function updateOrder(id: string, input: OrderInput): void {
-  const totals = computeTotals(input);
+  const totals = computeTotals(input, getSettings().processingFeePercent);
   db.transaction((tx) => {
+    // Backfill a missing invoice ID from the order's OWN number, not a new
+    // sequence value — so it stays matched to ORD-N.
+    let invoiceId = input.invoiceId.trim();
+    if (!invoiceId) {
+      const cur = tx
+        .select({ number: orders.number })
+        .from(orders)
+        .where(eq(orders.id, id))
+        .get();
+      invoiceId = (cur?.number ?? "").replace(/^ORD-/, "");
+    }
     tx.update(orders)
       .set({
+        invoiceId,
         contactId: input.contactId ?? null,
         currency: input.currency,
         subtotalCents: totals.subtotalCents,
         discountCents: totals.discountCents,
         taxCents: totals.taxCents,
         shippingCents: totals.shippingCents,
+        processingFeeCents: totals.processingFeeCents,
         totalCents: totals.totalCents,
         notes: input.notes,
+        title: input.title,
+        invoiceMessage: input.invoiceMessage,
+        applyProcessingFee: input.applyProcessingFee,
         dueDate: input.dueDate ?? null,
         updatedAt: new Date(),
       })
@@ -225,6 +282,8 @@ export function updateOrder(id: string, input: OrderInput): void {
           itemId: l.itemId ?? null,
           packageId: l.packageId ?? null,
           description: l.description,
+          variationName: l.variationName ?? "",
+          note: l.note ?? "",
           quantity: Math.round(l.quantity),
           unitPriceCents: Math.round(l.unitPriceCents),
           lineTotalCents: Math.round(l.unitPriceCents) * Math.round(l.quantity),
@@ -233,6 +292,13 @@ export function updateOrder(id: string, input: OrderInput): void {
         .run();
     });
   });
+}
+
+export function setTracking(id: string, trackingNumber: string): void {
+  db.update(orders)
+    .set({ trackingNumber, updatedAt: new Date() })
+    .where(eq(orders.id, id))
+    .run();
 }
 
 export function setOrderStatus(

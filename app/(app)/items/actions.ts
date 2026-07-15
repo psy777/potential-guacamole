@@ -12,6 +12,8 @@ import {
   type ItemInput,
   type ItemVariationInput,
 } from "@/lib/services/items";
+import { importSquareCatalog } from "@/lib/services/square-catalog";
+import { square as squareConfig } from "@/lib/config";
 
 function parseVariations(fd: FormData): ItemVariationInput[] {
   try {
@@ -88,4 +90,34 @@ export async function deleteItemAction(fd: FormData) {
   });
   revalidatePath("/items");
   redirect("/items");
+}
+
+export async function importSquareCatalogAction() {
+  const user = await requireUser();
+  if (!squareConfig.isConfigured) {
+    redirect("/items?err=" + encodeURIComponent("Square is not configured."));
+  }
+  let result: { created: number; updated: number };
+  try {
+    result = await importSquareCatalog();
+  } catch (err) {
+    redirect(
+      "/items?err=" +
+        encodeURIComponent("Square import failed: " + (err as Error).message)
+    );
+  }
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "item.import_square",
+    entityType: "item",
+    summary: `${result.created} created, ${result.updated} updated`,
+  });
+  revalidatePath("/items");
+  redirect(
+    "/items?msg=" +
+      encodeURIComponent(
+        `Imported ${result.created} new item(s) and updated ${result.updated} from Square.`
+      )
+  );
 }

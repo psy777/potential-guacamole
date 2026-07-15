@@ -34,15 +34,20 @@ export const squareProvider: PaymentProvider = {
     return squareConfig.isConfigured;
   },
 
-  async createPaymentLink(order: Order): Promise<PaymentLink> {
+  async createPaymentLink(
+    order: Order,
+    _contact,
+    amountCents: number
+  ): Promise<PaymentLink> {
     const json = await squareFetch("/v2/online-checkout/payment-links", {
       method: "POST",
       body: JSON.stringify({
-        idempotency_key: `link-${order.id}`,
+        // Amount is in the key so a changed balance mints a NEW link.
+        idempotency_key: `link-${order.id}-${amountCents}`,
         quick_pay: {
           name: `Order ${order.number}`,
           price_money: {
-            amount: order.totalCents,
+            amount: amountCents,
             currency: order.currency,
           },
           location_id: squareConfig.locationId,
@@ -60,6 +65,7 @@ export const squareProvider: PaymentProvider = {
         squareOrderId: link.order_id ?? null,
         paymentLinkUrl: link.url,
         paymentLinkProvider: "square",
+        paymentLinkAmountCents: amountCents,
       })
       .where(eq(orders.id, order.id))
       .run();
@@ -71,11 +77,14 @@ export const squareProvider: PaymentProvider = {
     if (!order.squareOrderId) return;
     const json = await squareFetch(`/v2/orders/${order.squareOrderId}`);
     const sqOrder = json.order;
-    const tenders: Array<{ id: string; amount_money?: { amount: number } }> =
-      sqOrder?.tenders ?? [];
+    const tenders: Array<{
+      id: string;
+      payment_id?: string;
+      amount_money?: { amount: number };
+    }> = sqOrder?.tenders ?? [];
     if (!tenders.length) return;
 
-    // Each tender is a captured payment against the order.
+    let actualFeeCents = 0;
     for (const tender of tenders) {
       upsertProviderPayment({
         orderId: order.id,
@@ -87,6 +96,27 @@ export const squareProvider: PaymentProvider = {
         method: "square",
         raw: tender,
       });
+
+      // Read the ACTUAL processing fee Square charged on this payment.
+      const paymentId = tender.payment_id ?? tender.id;
+      try {
+        const pj = await squareFetch(`/v2/payments/${paymentId}`);
+        const fees: Array<{ amount_money?: { amount: number } }> =
+          pj?.payment?.processing_fee ?? [];
+        actualFeeCents += fees.reduce(
+          (s, f) => s + Number(f.amount_money?.amount ?? 0),
+          0
+        );
+      } catch {
+        // Fee may not be computed yet; a later poll will pick it up.
+      }
+    }
+
+    if (actualFeeCents > 0) {
+      db.update(orders)
+        .set({ squareProcessingFeeCents: actualFeeCents })
+        .where(eq(orders.id, order.id))
+        .run();
     }
   },
 };

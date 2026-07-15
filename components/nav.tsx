@@ -13,22 +13,24 @@ const LINKS = [
 export function Nav({ user }: { user: User }) {
   return (
     <nav className="app-nav">
-      <Link href="/" className="brand">🔥 FireCoast</Link>
-      {LINKS.map((l) => (
-        <Link key={l.href} href={l.href} className="navlink">
-          {l.label}
+      <div className="nav-inner">
+        <Link href="/" className="brand">🔥 FireCoast</Link>
+        {LINKS.map((l) => (
+          <Link key={l.href} href={l.href} className="navlink">
+            {l.label}
+          </Link>
+        ))}
+        {user.role === "admin" && (
+          <Link href="/users" className="navlink">
+            Users
+          </Link>
+        )}
+        <span className="spacer" />
+        <span className="who">{user.name}</span>
+        <Link href="/logout" className="navlink">
+          Log out
         </Link>
-      ))}
-      {user.role === "admin" && (
-        <Link href="/users" className="navlink">
-          Users
-        </Link>
-      )}
-      <span className="spacer" />
-      <span className="who">{user.name}</span>
-      <Link href="/logout" className="navlink">
-        Log out
-      </Link>
+      </div>
     </nav>
   );
 }
