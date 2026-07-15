@@ -27,6 +27,7 @@ export type OrderInput = {
   contactId?: string | null;
   currency: string;
   notes: string;
+  dueDate: Date | null;
   discountCents: number;
   taxCents: number;
   shippingCents: number;
@@ -155,7 +156,7 @@ export function createOrder(
       .values({
         number,
         contactId: input.contactId ?? null,
-        status: "draft",
+        status: "open",
         currency: input.currency,
         subtotalCents: totals.subtotalCents,
         discountCents: totals.discountCents,
@@ -163,6 +164,7 @@ export function createOrder(
         shippingCents: totals.shippingCents,
         totalCents: totals.totalCents,
         notes: input.notes,
+        dueDate: input.dueDate ?? null,
         createdBy: user.id,
       })
       .returning()
@@ -186,7 +188,7 @@ export function createOrder(
     tx.insert(orderStatusHistory)
       .values({
         orderId: order.id,
-        status: "draft",
+        status: "open",
         note: "Order created",
         userName: user.name,
       })
@@ -209,6 +211,7 @@ export function updateOrder(id: string, input: OrderInput): void {
         shippingCents: totals.shippingCents,
         totalCents: totals.totalCents,
         notes: input.notes,
+        dueDate: input.dueDate ?? null,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, id))
@@ -271,9 +274,11 @@ export function recomputeOrderPaid(orderId: string): void {
     .where(eq(orders.id, orderId))
     .run();
 
-  // Auto-advance to "paid" once fully covered (but never override shipped/cancelled).
+  // Auto-advance an invoiced order to "paid" once fully covered. Payment that
+  // arrives earlier (a prepaid/web order) is still recorded, but the order
+  // stays "open" because it still needs making.
   const fullyPaid = order.totalCents > 0 && amountPaidCents >= order.totalCents;
-  if (fullyPaid && (order.status === "draft" || order.status === "sent")) {
+  if (fullyPaid && order.status === "invoiced") {
     setOrderStatus(orderId, "paid", { name: "System" }, "Payment received in full");
   }
 }

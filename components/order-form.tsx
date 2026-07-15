@@ -22,6 +22,13 @@ type Line = {
   unitPrice: string; // dollars, as typed
 };
 
+const isoDate = (d: Date) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(
+    x.getDate()
+  ).padStart(2, "0")}`;
+};
+
 export function OrderForm({
   action,
   contacts,
@@ -119,7 +126,7 @@ export function OrderForm({
       {order && <input type="hidden" name="id" value={order.id} />}
       <input type="hidden" name="lines" value={JSON.stringify(lines)} />
 
-      <div className="grid2">
+      <div className="grid3">
         <div className="field">
           <label htmlFor="contactId">Customer</label>
           <select id="contactId" name="contactId" defaultValue={order?.contactId ?? ""}>
@@ -128,6 +135,15 @@ export function OrderForm({
               <option key={c.id} value={c.id}>{c.companyName}</option>
             ))}
           </select>
+        </div>
+        <div className="field">
+          <label htmlFor="dueDate">Due date</label>
+          <input
+            id="dueDate"
+            name="dueDate"
+            type="date"
+            defaultValue={order?.dueDate ? isoDate(order.dueDate) : ""}
+          />
         </div>
         <div className="field">
           <label htmlFor="currency">Currency</label>

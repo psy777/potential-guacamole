@@ -45,10 +45,12 @@ function parseOrder(fd: FormData): OrderInput {
     lines = [];
   }
 
+  const dueRaw = String(fd.get("dueDate") || "").trim();
   return {
     contactId: String(fd.get("contactId") || "") || null,
     currency: String(fd.get("currency") || "USD").toUpperCase(),
     notes: String(fd.get("notes") || ""),
+    dueDate: dueRaw ? new Date(`${dueRaw}T00:00:00`) : null,
     discountCents: dollarsToCents(String(fd.get("discount") || "0")),
     taxCents: dollarsToCents(String(fd.get("tax") || "0")),
     shippingCents: dollarsToCents(String(fd.get("shipping") || "0")),
@@ -85,11 +87,15 @@ export async function updateOrderAction(fd: FormData) {
   redirect(`/orders/${id}`);
 }
 
+const VALID_STATUSES = ["open", "shipped", "invoiced", "paid", "cancelled"];
+
 export async function setStatusAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  const status = String(fd.get("status")) as Order["status"];
-  setOrderStatus(id, status, user);
+  const status = String(fd.get("status"));
+  if (!VALID_STATUSES.includes(status)) redirect(`/orders/${id}`);
+
+  setOrderStatus(id, status as Order["status"], user);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -99,6 +105,7 @@ export async function setStatusAction(fd: FormData) {
     summary: status,
   });
   revalidatePath(`/orders/${id}`);
+  redirect(`/orders/${id}?msg=${encodeURIComponent(`Status updated to ${status}.`)}`);
 }
 
 export async function manualPaymentAction(fd: FormData) {
@@ -184,7 +191,9 @@ export async function emailInvoiceAction(fd: FormData) {
     html: `${message}${payButton}`,
     attachment: { filename: `${order.number}.pdf`, content: pdf },
   });
-  if (order.status === "draft") setOrderStatus(id, "sent", { name: "System" }, "Invoice emailed");
+  if (order.status === "open" || order.status === "shipped") {
+    setOrderStatus(id, "invoiced", { name: "System" }, "Invoice emailed");
+  }
   revalidatePath(`/orders/${id}`);
   redirect(
     `/orders/${id}?${

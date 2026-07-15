@@ -18,18 +18,21 @@ import {
 } from "../actions";
 
 const NEXT_STATUS: Record<string, { label: string; status: string }[]> = {
-  draft: [
-    { label: "Mark sent", status: "sent" },
-    { label: "Cancel", status: "cancelled" },
-  ],
-  sent: [
+  open: [
     { label: "Mark shipped", status: "shipped" },
     { label: "Cancel", status: "cancelled" },
   ],
-  paid: [{ label: "Mark shipped", status: "shipped" }],
-  shipped: [],
-  cancelled: [{ label: "Reopen as draft", status: "draft" }],
+  shipped: [
+    { label: "Mark invoiced", status: "invoiced" },
+    { label: "Cancel", status: "cancelled" },
+  ],
+  invoiced: [{ label: "Mark paid", status: "paid" }],
+  paid: [],
+  cancelled: [{ label: "Reopen", status: "open" }],
 };
+
+const ALL_STATUSES = ["open", "shipped", "invoiced", "paid", "cancelled"] as const;
+const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default async function OrderDetailPage({
   params,
@@ -70,10 +73,31 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
-      {NEXT_STATUS[order.status]?.length > 0 && (
-        <div className="card" style={{ padding: "0.75rem 1rem" }}>
+      {order.dueDate && (
+        <p className="small" style={{ marginTop: "-0.75rem", marginBottom: "1rem" }}>
+          <span className="muted">Due </span>
+          <span
+            className={
+              order.dueDate < new Date() && order.status === "open" ? "due-overdue" : ""
+            }
+          >
+            {new Date(order.dueDate).toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        </p>
+      )}
+
+      <div className="card" style={{ padding: "0.75rem 1rem" }}>
+        <div
+          className="actions"
+          style={{ justifyContent: "space-between", gap: "1rem" }}
+        >
           <div className="actions">
-            {NEXT_STATUS[order.status].map((t) => (
+            {(NEXT_STATUS[order.status] ?? []).map((t) => (
               <form key={t.status} action={setStatusAction}>
                 <input type="hidden" name="id" value={order.id} />
                 <input type="hidden" name="status" value={t.status} />
@@ -81,8 +105,18 @@ export default async function OrderDetailPage({
               </form>
             ))}
           </div>
+          <form action={setStatusAction} className="actions" style={{ gap: "0.4rem" }}>
+            <input type="hidden" name="id" value={order.id} />
+            <label className="small muted" style={{ margin: 0 }}>Set status</label>
+            <select name="status" defaultValue={order.status} style={{ width: "auto" }}>
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{titleCase(s)}</option>
+              ))}
+            </select>
+            <button type="submit" className="btn ghost btn-sm">Update</button>
+          </form>
         </div>
-      )}
+      </div>
 
       <div className="grid2">
         <div className="card">

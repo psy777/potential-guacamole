@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { User } from "@/lib/db/schema";
 
 const LINKS = [
-  { href: "/", label: "Dashboard" },
   { href: "/orders", label: "Orders" },
   { href: "/contacts", label: "Contacts" },
   { href: "/items", label: "Items" },
@@ -14,7 +13,7 @@ const LINKS = [
 export function Nav({ user }: { user: User }) {
   return (
     <nav className="app-nav">
-      <span className="brand">🔥 FireCoast</span>
+      <Link href="/" className="brand">🔥 FireCoast</Link>
       {LINKS.map((l) => (
         <Link key={l.href} href={l.href} className="navlink">
           {l.label}

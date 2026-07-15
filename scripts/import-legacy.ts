@@ -171,14 +171,11 @@ console.log("Done. Review the imported data in the app.");
 
 function normalizeStatus(
   s: string
-): "draft" | "sent" | "paid" | "shipped" | "cancelled" {
+): "open" | "shipped" | "invoiced" | "paid" | "cancelled" {
   const v = s.toLowerCase();
-  if (["draft", "sent", "paid", "shipped", "cancelled"].includes(v)) {
-    return v as "draft" | "sent" | "paid" | "shipped" | "cancelled";
-  }
+  if (v.includes("cancel")) return "cancelled";
   if (v.includes("paid")) return "paid";
   if (v.includes("ship")) return "shipped";
-  if (v.includes("cancel")) return "cancelled";
-  if (v.includes("sent")) return "sent";
-  return "draft";
+  if (v.includes("invoic") || v.includes("sent")) return "invoiced";
+  return "open"; // legacy "draft"/new orders → to make
 }

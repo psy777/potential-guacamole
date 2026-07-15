@@ -174,11 +174,13 @@ export const orders = sqliteTable(
     contactId: text("contact_id").references(() => contacts.id, {
       onDelete: "set null",
     }),
+    // Lifecycle matches make-to-order, bill-on-shipment:
+    // open (to make) -> shipped -> invoiced -> paid. (+ cancelled)
     status: text("status", {
-      enum: ["draft", "sent", "paid", "shipped", "cancelled"],
+      enum: ["open", "shipped", "invoiced", "paid", "cancelled"],
     })
       .notNull()
-      .default("draft"),
+      .default("open"),
     currency: text("currency").notNull().default("USD"),
     // All amounts are integer cents.
     subtotalCents: integer("subtotal_cents").notNull().default(0),
@@ -189,6 +191,8 @@ export const orders = sqliteTable(
     // Cached sum of succeeded payments; "paid in full" == amountPaid >= total.
     amountPaidCents: integer("amount_paid_cents").notNull().default(0),
     notes: text("notes").notNull().default(""),
+    // Optional promised/due date — the axis the production dashboard sorts on.
+    dueDate: integer("due_date", { mode: "timestamp_ms" }),
     // External references for reconciliation.
     stripeCheckoutId: text("stripe_checkout_id"),
     squarePaymentLinkId: text("square_payment_link_id"),

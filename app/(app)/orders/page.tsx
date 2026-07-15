@@ -3,7 +3,7 @@ import { listOrders } from "@/lib/services/orders";
 import { formatMoney } from "@/lib/money";
 import { StatusBadge } from "@/components/ui";
 
-const STATUSES = ["", "draft", "sent", "paid", "shipped", "cancelled"];
+const STATUSES = ["", "open", "shipped", "invoiced", "paid", "cancelled"];
 
 export default async function OrdersPage({
   searchParams,
@@ -43,6 +43,7 @@ export default async function OrdersPage({
               <tr>
                 <th>Order</th>
                 <th>Customer</th>
+                <th>Due</th>
                 <th>Status</th>
                 <th className="right">Total</th>
                 <th className="right">Paid</th>
@@ -56,6 +57,11 @@ export default async function OrdersPage({
                     <Link href={`/orders/${o.id}`}>{o.number}</Link>
                   </td>
                   <td>{o.contactName ?? "—"}</td>
+                  <td className="num small">
+                    {o.dueDate
+                      ? new Date(o.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                      : "—"}
+                  </td>
                   <td>
                     <StatusBadge status={o.status} />
                   </td>
