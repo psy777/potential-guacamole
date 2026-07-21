@@ -27,9 +27,22 @@ export function Nav({ user }: { user: User }) {
         )}
         <span className="spacer" />
         <span className="who">{user.name}</span>
-        <Link href="/logout" className="navlink">
-          Log out
-        </Link>
+        <form action="/logout" method="post" style={{ display: "inline" }}>
+          <button
+            type="submit"
+            className="navlink"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              font: "inherit",
+              color: "inherit",
+              padding: "0.9rem 0.2rem",
+            }}
+          >
+            Log out
+          </button>
+        </form>
       </div>
     </nav>
   );
