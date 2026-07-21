@@ -1,14 +1,17 @@
 import { notFound } from "next/navigation";
 import { getContact } from "@/lib/services/contacts";
 import { getSettings } from "@/lib/services/settings";
+import { APP_URL } from "@/lib/config";
 import { ContactForm } from "@/components/contact-form";
 import { InlineAction } from "@/components/ui";
+import { CopyableLink } from "@/components/copyable-link";
 import {
   updateContactAction,
   deleteContactAction,
   setPortalAccessAction,
   setPortalPasswordAction,
   setContactDiscountAction,
+  sendPortalInviteAction,
 } from "../actions";
 
 export default async function EditContactPage({
@@ -25,6 +28,17 @@ export default async function EditContactPage({
   const settings = await getSettings();
 
   const hasPassword = Boolean(contact.passwordHash);
+  const invitePending = Boolean(
+    contact.portalInviteToken &&
+      contact.portalInviteExpiresAt &&
+      contact.portalInviteExpiresAt > new Date()
+  );
+  const activationUrl = contact.portalInviteToken
+    ? `${APP_URL}/portal/activate?token=${contact.portalInviteToken}`
+    : null;
+  const active = contact.portalEnabled && hasPassword;
+  const statusLabel = active ? "Active" : invitePending ? "Invited" : "Not set up";
+  const statusClass = active ? "paid" : invitePending ? "invoiced" : "draft";
 
   return (
     <>
@@ -46,14 +60,38 @@ export default async function EditContactPage({
       <div className="card" style={{ marginTop: "1.5rem" }}>
         <div className="header-row">
           <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Wholesale portal access</h2>
-          <span className={`badge ${contact.portalEnabled ? "paid" : "draft"}`}>
-            {contact.portalEnabled ? "Enabled" : "Disabled"}
-          </span>
+          <span className={`badge ${statusClass}`}>{statusLabel}</span>
         </div>
         <p className="muted small">
-          Lets this customer sign in at the wholesale portal to see their prices and
-          place self-serve orders. They sign in with <strong>{contact.email || "(no email set)"}</strong>.
+          Invite this customer to sign in at the wholesale portal, see their prices,
+          and place self-serve orders. They&apos;ll sign in with{" "}
+          <strong>{contact.email || "(no email set)"}</strong>.
         </p>
+
+        {/* Invitation — the normal way to onboard a customer */}
+        <div style={{ margin: "0.75rem 0 1rem" }}>
+          <form action={sendPortalInviteAction}>
+            <input type="hidden" name="id" value={contact.id} />
+            <button type="submit" className="btn btn-sm" disabled={!contact.email}>
+              {active || invitePending ? "Resend invitation" : "Send portal invitation"}
+            </button>
+            {!contact.email && (
+              <span className="muted small" style={{ marginLeft: "0.5rem" }}>
+                Add an email address first.
+              </span>
+            )}
+          </form>
+
+          {invitePending && activationUrl && (
+            <div style={{ marginTop: "0.6rem" }}>
+              <p className="muted small" style={{ margin: 0 }}>
+                Invitation pending — the customer hasn&apos;t activated yet. If the
+                email didn&apos;t arrive, send them this activation link:
+              </p>
+              <CopyableLink url={activationUrl} />
+            </div>
+          )}
+        </div>
 
         <div className="grid2" style={{ marginTop: "0.5rem" }}>
           {/* Enable / disable */}
@@ -72,16 +110,16 @@ export default async function EditContactPage({
             </button>
           </form>
 
-          {/* Set / reset password */}
+          {/* Set / reset password manually (fallback when email isn't an option) */}
           <form action={setPortalPasswordAction} className="stack">
             <div className="field">
               <label htmlFor="pw">
-                {hasPassword ? "Reset password" : "Set a password"}
+                {hasPassword ? "Reset password manually" : "Or set a password manually"}
               </label>
               <input id="pw" name="password" type="text" minLength={8} placeholder="At least 8 characters" required />
             </div>
             <input type="hidden" name="id" value={contact.id} />
-            <button type="submit" className="btn btn-sm">
+            <button type="submit" className="btn btn-sm secondary">
               {hasPassword ? "Update password" : "Set password & enable"}
             </button>
           </form>

@@ -81,6 +81,64 @@ export async function authenticateContact(
   return ok ? contact : null;
 }
 
+// --- Invitations (customer sets their own password) -------------------------
+
+const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+/**
+ * Mint a single-use invitation token for a contact so they can set their own
+ * password. Returns the token + expiry (the caller emails the activation link).
+ */
+export async function createPortalInvite(
+  contactId: string
+): Promise<{ token: string; expiresAt: Date }> {
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  await db
+    .update(contacts)
+    .set({ portalInviteToken: token, portalInviteExpiresAt: expiresAt, updatedAt: new Date() })
+    .where(eq(contacts.id, contactId));
+  return { token, expiresAt };
+}
+
+/** The contact behind a valid, unexpired invite token, or null. */
+export async function getContactByInviteToken(token: string): Promise<Contact | null> {
+  if (!token) return null;
+  const contact = (
+    await db.select().from(contacts).where(eq(contacts.portalInviteToken, token)).limit(1)
+  )[0];
+  if (!contact) return null;
+  if (!contact.portalInviteExpiresAt || contact.portalInviteExpiresAt < new Date()) {
+    return null;
+  }
+  return contact;
+}
+
+/**
+ * Redeem an invite token: set the customer's password, enable access, and clear
+ * the token (single-use). Returns the contact on success, or null if the token
+ * is invalid/expired.
+ */
+export async function activatePortalAccount(
+  token: string,
+  password: string
+): Promise<Contact | null> {
+  const contact = await getContactByInviteToken(token);
+  if (!contact) return null;
+  const passwordHash = await hashPassword(password);
+  await db
+    .update(contacts)
+    .set({
+      passwordHash,
+      portalEnabled: true,
+      portalInviteToken: null,
+      portalInviteExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(contacts.id, contact.id));
+  return contact;
+}
+
 // --- Studio-side administration (grant / revoke / reset portal access) ------
 
 /** Set a portal password for a contact and enable their access. */

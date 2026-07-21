@@ -15,6 +15,13 @@
       "when": 1784655251625,
       "tag": "0001_blushing_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784658938611,
+      "tag": "0002_absurd_the_renegades",
+      "breakpoints": true
     }
   ]
 }

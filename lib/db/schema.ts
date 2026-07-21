@@ -112,6 +112,10 @@ export const contacts = pgTable("contacts", {
   portalEnabled: boolean("portal_enabled").notNull().default(false),
   passwordHash: text("password_hash"),
   wholesaleDiscountPercent: real("wholesale_discount_percent"), // null = use global default
+  // Single-use invitation token so a customer sets their OWN password. Cleared
+  // once they activate. Expiry guards against stale links.
+  portalInviteToken: text("portal_invite_token"),
+  portalInviteExpiresAt: timestamp("portal_invite_expires_at", { mode: "date" }),
   // External payment-provider customer IDs (populated lazily on first use).
   stripeCustomerId: text("stripe_customer_id"),
   squareCustomerId: text("square_customer_id"),

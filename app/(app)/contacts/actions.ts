@@ -14,7 +14,12 @@ import {
   setContactPassword,
   setContactPortalEnabled,
   setContactDiscount,
+  createPortalInvite,
 } from "@/lib/auth/wholesale";
+import { getContact } from "@/lib/services/contacts";
+import { getSettings } from "@/lib/services/settings";
+import { sendEmail } from "@/lib/services/email";
+import { APP_URL } from "@/lib/config";
 
 function parse(fd: FormData): ContactInput {
   const s = (k: string) => String(fd.get(k) || "").trim();
@@ -120,6 +125,55 @@ export async function setPortalPasswordAction(fd: FormData) {
   });
   revalidatePath(`/contacts/${id}`);
   redirect(`/contacts/${id}?msg=${encodeURIComponent("Password set — portal access is now active.")}`);
+}
+
+export async function sendPortalInviteAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("id"));
+  const contact = await getContact(id);
+  if (!contact) redirect("/contacts");
+  if (!contact.email) {
+    redirect(`/contacts/${id}?err=${encodeURIComponent("Add an email address before inviting this customer.")}`);
+  }
+
+  const { token } = await createPortalInvite(id);
+  const activationUrl = `${APP_URL}/portal/activate?token=${token}`;
+  const settings = await getSettings();
+  const brand = settings.businessName || "Comfort Cross";
+
+  const html = `
+    <p>Hi ${contact.contactName || contact.companyName},</p>
+    <p>${brand} has set up a wholesale ordering account for you. Click below to
+       choose a password and activate your account:</p>
+    <p style="margin:22px 0">
+      <a href="${activationUrl}" style="display:inline-block;background:#33564b;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:bold">Activate your account</a>
+    </p>
+    <p style="color:#6b7280;font-size:13px">Or paste this link into your browser:<br>${activationUrl}</p>
+    <p style="color:#6b7280;font-size:13px">This link expires in 7 days. If you weren't expecting it, you can ignore this email.</p>`;
+
+  const result = await sendEmail({
+    to: contact.email,
+    subject: `Activate your ${brand} wholesale account`,
+    html,
+  });
+
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "contact.portal_invite",
+    entityType: "contact",
+    entityId: id,
+    summary: result.ok ? "sent" : "email failed",
+  });
+
+  revalidatePath(`/contacts/${id}`);
+  redirect(
+    `/contacts/${id}?${
+      result.ok
+        ? "msg=" + encodeURIComponent(`Invitation emailed to ${contact.email}.`)
+        : "err=" + encodeURIComponent(`Email not sent (${result.error}). Copy the activation link below and send it to the customer.`)
+    }`
+  );
 }
 
 export async function setContactDiscountAction(fd: FormData) {

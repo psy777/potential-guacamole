@@ -6,6 +6,7 @@ import {
   PUBLIC_PREFIXES,
   PORTAL_PREFIX,
   PORTAL_LOGIN,
+  PORTAL_PUBLIC_PATHS,
   WHOLESALE_SUBDOMAIN,
 } from "@/lib/constants";
 
@@ -40,7 +41,7 @@ export function middleware(req: NextRequest) {
       return NextResponse.rewrite(url);
     };
 
-    if (portalPath === PORTAL_LOGIN) return rewrite();
+    if (PORTAL_PUBLIC_PATHS.includes(portalPath)) return rewrite();
 
     const hasWholesale = Boolean(req.cookies.get(WHOLESALE_COOKIE)?.value);
     if (!hasWholesale) {

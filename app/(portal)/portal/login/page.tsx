@@ -30,7 +30,8 @@ export default async function PortalLoginPage({
           </button>
         </form>
         <p className="muted small" style={{ textAlign: "center", marginTop: "1rem" }}>
-          Need access? Contact Comfort Cross to set up your account.
+          Accounts are by invitation. Check your email for an invitation from
+          Comfort Cross to activate yours.
         </p>
       </div>
     </div>

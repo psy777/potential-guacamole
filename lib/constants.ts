@@ -11,9 +11,11 @@ export const PUBLIC_PATHS = ["/login", "/setup"];
 // by provider signatures; the portal has its own separate auth check).
 export const PUBLIC_PREFIXES = ["/api/webhooks/", "/portal"];
 
-// The wholesale portal path space + its one public (unauthenticated) route.
+// The wholesale portal path space + its public (unauthenticated) routes.
 export const PORTAL_PREFIX = "/portal";
 export const PORTAL_LOGIN = "/portal/login";
+export const PORTAL_ACTIVATE = "/portal/activate";
+export const PORTAL_PUBLIC_PATHS = [PORTAL_LOGIN, PORTAL_ACTIVATE];
 
 // Hostname label that maps to the wholesale portal (e.g. wholesale.firecoast.net).
 export const WHOLESALE_SUBDOMAIN = "wholesale";

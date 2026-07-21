@@ -15,6 +15,8 @@ export type ContactInput = Omit<
   | "portalEnabled"
   | "passwordHash"
   | "wholesaleDiscountPercent"
+  | "portalInviteToken"
+  | "portalInviteExpiresAt"
 >;
 
 export async function listContacts(search?: string): Promise<Contact[]> {
