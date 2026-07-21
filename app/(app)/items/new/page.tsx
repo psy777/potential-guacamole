@@ -12,7 +12,7 @@ export default async function NewItemPage({
     <>
       <h1>New item</h1>
       {error && <div className="notice error">Item name is required.</div>}
-      <ItemForm action={createItemAction} categories={listCategories()} />
+      <ItemForm action={createItemAction} categories={await listCategories()} />
     </>
   );
 }

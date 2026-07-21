@@ -51,7 +51,7 @@ export default async function SettingsPage({
   searchParams: Promise<{ msg?: string }>;
 }) {
   const { msg } = await searchParams;
-  const s = getSettings();
+  const s = await getSettings();
 
   return (
     <>

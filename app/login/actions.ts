@@ -10,7 +10,7 @@ export async function loginAction(formData: FormData) {
   const password = String(formData.get("password") || "");
   const next = String(formData.get("next") || "/");
 
-  const user = getUserByEmail(email);
+  const user = await getUserByEmail(email);
   const ok =
     user && user.active && (await verifyPassword(password, user.passwordHash));
 

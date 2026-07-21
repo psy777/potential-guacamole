@@ -1,1 +1,0 @@
-ALTER TABLE `orders` ADD `payment_link_amount_cents` integer;

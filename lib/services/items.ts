@@ -33,21 +33,21 @@ export function startingPriceCents(item: ItemWithVariations): number {
   return Math.min(...item.variations.map((v) => v.priceCents));
 }
 
-function withVariations(item: Item): ItemWithVariations {
-  const variations = db
+async function withVariations(item: Item): Promise<ItemWithVariations> {
+  const variations = await db
     .select()
     .from(itemVariations)
     .where(eq(itemVariations.itemId, item.id))
-    .orderBy(asc(itemVariations.position))
-    .all();
+    .orderBy(asc(itemVariations.position));
   return { ...item, variations };
 }
 
-export function listItems(search?: string): ItemWithVariations[] {
-  const q = db.select().from(items);
+export async function listItems(search?: string): Promise<ItemWithVariations[]> {
   const rows =
     search && search.trim()
-      ? q
+      ? await db
+          .select()
+          .from(items)
           .where(
             or(
               like(items.name, `%${search.trim()}%`),
@@ -56,24 +56,22 @@ export function listItems(search?: string): ItemWithVariations[] {
             )
           )
           .orderBy(asc(items.name))
-          .all()
-      : q.orderBy(asc(items.name)).all();
-  return rows.map(withVariations);
+      : await db.select().from(items).orderBy(asc(items.name));
+  return Promise.all(rows.map(withVariations));
 }
 
 /** Distinct, non-empty category names (for the category picker). */
-export function listCategories(): string[] {
-  return db
+export async function listCategories(): Promise<string[]> {
+  const rows = await db
     .selectDistinct({ category: items.category })
     .from(items)
     .where(sql`${items.category} <> ''`)
-    .orderBy(asc(items.category))
-    .all()
-    .map((r) => r.category);
+    .orderBy(asc(items.category));
+  return rows.map((r) => r.category);
 }
 
-export function getItem(id: string): ItemWithVariations | undefined {
-  const item = db.select().from(items).where(eq(items.id, id)).get();
+export async function getItem(id: string): Promise<ItemWithVariations | undefined> {
+  const item = (await db.select().from(items).where(eq(items.id, id)).limit(1))[0];
   return item ? withVariations(item) : undefined;
 }
 
@@ -87,49 +85,58 @@ function normalizeVariations(input: ItemVariationInput[]): ItemVariationInput[] 
   return cleaned.map((v) => ({ ...v, name: v.name || "Regular" }));
 }
 
-export function createItem(input: ItemInput): ItemWithVariations {
+export async function createItem(input: ItemInput): Promise<ItemWithVariations> {
   const variations = normalizeVariations(input.variations);
   const base = variations[0];
-  return db.transaction((tx) => {
-    const item = tx
-      .insert(items)
-      .values({
-        name: input.name,
-        description: input.description,
-        category: input.category,
-        currency: input.currency,
-        active: input.active,
-        imagePath: input.imagePath,
-        sku: base.sku,
-        priceCents: base.priceCents,
-      })
-      .returning()
-      .get();
-    variations.forEach((v, i) => {
-      tx.insert(itemVariations)
+  return db.transaction(async (tx) => {
+    const item = (
+      await tx
+        .insert(items)
         .values({
-          itemId: item.id,
-          name: v.name,
-          sku: v.sku,
-          gtin: v.gtin,
-          priceCents: v.priceCents,
-          imagePath: v.imagePath,
-          position: i,
+          name: input.name,
+          description: input.description,
+          category: input.category,
+          currency: input.currency,
+          active: input.active,
+          imagePath: input.imagePath,
+          sku: base.sku,
+          priceCents: base.priceCents,
         })
-        .run();
-    });
-    return withVariations(item);
+        .returning()
+    )[0];
+    const created: ItemVariation[] = [];
+    for (let i = 0; i < variations.length; i++) {
+      const v = variations[i];
+      created.push(
+        (
+          await tx
+            .insert(itemVariations)
+            .values({
+              itemId: item.id,
+              name: v.name,
+              sku: v.sku,
+              gtin: v.gtin,
+              priceCents: v.priceCents,
+              imagePath: v.imagePath,
+              position: i,
+            })
+            .returning()
+        )[0]
+      );
+    }
+    return { ...item, variations: created };
   });
 }
 
-export function updateItem(
+export async function updateItem(
   id: string,
   input: ItemInput
-): ItemWithVariations | undefined {
+): Promise<ItemWithVariations | undefined> {
   const variations = normalizeVariations(input.variations);
   const base = variations[0];
-  return db.transaction((tx) => {
-    tx.update(items)
+  return db.transaction(async (tx) => {
+    await tx
+      .update(items)
       .set({
         name: input.name,
         description: input.description,
@@ -141,27 +148,33 @@ export function updateItem(
         priceCents: base.priceCents,
         updatedAt: new Date(),
       })
-      .where(eq(items.id, id))
-      .run();
-    tx.delete(itemVariations).where(eq(itemVariations.itemId, id)).run();
-    variations.forEach((v, i) => {
-      tx.insert(itemVariations)
-        .values({
-          itemId: id,
-          name: v.name,
-          sku: v.sku,
-          gtin: v.gtin,
-          priceCents: v.priceCents,
-          imagePath: v.imagePath,
-          position: i,
-        })
-        .run();
-    });
-    const item = tx.select().from(items).where(eq(items.id, id)).get();
-    return item ? withVariations(item) : undefined;
+      .where(eq(items.id, id));
+    await tx.delete(itemVariations).where(eq(itemVariations.itemId, id));
+    const created: ItemVariation[] = [];
+    for (let i = 0; i < variations.length; i++) {
+      const v = variations[i];
+      created.push(
+        (
+          await tx
+            .insert(itemVariations)
+            .values({
+              itemId: id,
+              name: v.name,
+              sku: v.sku,
+              gtin: v.gtin,
+              priceCents: v.priceCents,
+              imagePath: v.imagePath,
+              position: i,
+            })
+            .returning()
+        )[0]
+      );
+    }
+    const item = (await tx.select().from(items).where(eq(items.id, id)).limit(1))[0];
+    return item ? { ...item, variations: created } : undefined;
   });
 }
 
-export function deleteItem(id: string): void {
-  db.delete(items).where(eq(items.id, id)).run();
+export async function deleteItem(id: string): Promise<void> {
+  await db.delete(items).where(eq(items.id, id));
 }

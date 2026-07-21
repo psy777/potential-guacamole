@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   }
 
   // Idempotency: ignore events we've already processed.
-  if (!rememberWebhook("stripe", event.id, event.type, body)) {
+  if (!(await rememberWebhook("stripe", event.id, event.type, body))) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 

@@ -6,7 +6,7 @@ import { createSession } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/audit";
 
 export async function setupAction(formData: FormData) {
-  if (userCount() > 0) redirect("/login");
+  if ((await userCount()) > 0) redirect("/login");
 
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim();

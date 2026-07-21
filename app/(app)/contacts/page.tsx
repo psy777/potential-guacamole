@@ -7,7 +7,7 @@ export default async function ContactsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const contacts = listContacts(q);
+  const contacts = await listContacts(q);
 
   return (
     <>

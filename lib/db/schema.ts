@@ -1,13 +1,15 @@
-// The single source of truth for the database shape.
+// The single source of truth for the database shape (PostgreSQL).
 // Money is ALWAYS stored as integer cents + an explicit currency. Never floats.
 import {
-  sqliteTable,
+  pgTable,
   text,
   integer,
   real,
+  boolean,
+  timestamp,
   index,
   unique,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 
 const id = () =>
@@ -16,18 +18,18 @@ const id = () =>
     .$defaultFn(() => randomUUID());
 
 const createdAt = () =>
-  integer("created_at", { mode: "timestamp_ms" })
+  timestamp("created_at", { mode: "date" })
     .notNull()
     .$defaultFn(() => new Date());
 
 const updatedAt = () =>
-  integer("updated_at", { mode: "timestamp_ms" })
+  timestamp("updated_at", { mode: "date" })
     .notNull()
     .$defaultFn(() => new Date());
 
 // --- Users & auth ---------------------------------------------------------
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
@@ -35,20 +37,20 @@ export const users = sqliteTable("users", {
   role: text("role", { enum: ["admin", "member"] })
     .notNull()
     .default("member"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });
 
-export const sessions = sqliteTable("sessions", {
+export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(), // random opaque token, stored in the cookie
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
   createdAt: createdAt(),
 });
 
-export const auditLogs = sqliteTable(
+export const auditLogs = pgTable(
   "audit_logs",
   {
     id: id(),
@@ -67,7 +69,7 @@ export const auditLogs = sqliteTable(
 
 // --- Business settings (single row) --------------------------------------
 
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   id: integer("id").primaryKey().default(1),
   businessName: text("business_name").notNull().default("My Business"),
   businessEmail: text("business_email").notNull().default(""),
@@ -83,7 +85,7 @@ export const settings = sqliteTable("settings", {
 
 // --- Contacts (customers) -------------------------------------------------
 
-export const contacts = sqliteTable("contacts", {
+export const contacts = pgTable("contacts", {
   id: id(),
   companyName: text("company_name").notNull(),
   contactName: text("contact_name").notNull().default(""),
@@ -109,27 +111,31 @@ export const contacts = sqliteTable("contacts", {
 
 // --- Catalog: items & packages -------------------------------------------
 
-export const items = sqliteTable("items", {
-  id: id(),
-  name: text("name").notNull(),
-  description: text("description").notNull().default(""),
-  category: text("category").notNull().default(""),
-  // sku/priceCents mirror the FIRST variation, so simple contexts (packages,
-  // "starting at" price) work without joining variations.
-  sku: text("sku").notNull().default(""),
-  priceCents: integer("price_cents").notNull().default(0),
-  currency: text("currency").notNull().default("USD"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
-  imagePath: text("image_path").notNull().default(""),
-  // Links this item to a Square catalog object (set when imported from Square).
-  squareCatalogId: text("square_catalog_id"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-}, (t) => [unique("items_square_uq").on(t.squareCatalogId)]);
+export const items = pgTable(
+  "items",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    category: text("category").notNull().default(""),
+    // sku/priceCents mirror the FIRST variation, so simple contexts (packages,
+    // "starting at" price) work without joining variations.
+    sku: text("sku").notNull().default(""),
+    priceCents: integer("price_cents").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    active: boolean("active").notNull().default(true),
+    imagePath: text("image_path").notNull().default(""),
+    // Links this item to a Square catalog object (set when imported from Square).
+    squareCatalogId: text("square_catalog_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique("items_square_uq").on(t.squareCatalogId)]
+);
 
 // Square-style variations: one item can have many sellable versions
 // (Small/Medium/Large), each with its own SKU, barcode, and price.
-export const itemVariations = sqliteTable(
+export const itemVariations = pgTable(
   "item_variations",
   {
     id: id(),
@@ -141,23 +147,23 @@ export const itemVariations = sqliteTable(
     gtin: text("gtin").notNull().default(""), // barcode
     priceCents: integer("price_cents").notNull().default(0),
     position: integer("position").notNull().default(0),
-    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    active: boolean("active").notNull().default(true),
     imagePath: text("image_path").notNull().default(""),
     squareVariationId: text("square_variation_id"),
   },
   (t) => [index("item_variations_item_idx").on(t.itemId)]
 );
 
-export const packages = sqliteTable("packages", {
+export const packages = pgTable("packages", {
   id: id(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
 
-export const packageItems = sqliteTable(
+export const packageItems = pgTable(
   "package_items",
   {
     id: id(),
@@ -174,7 +180,7 @@ export const packageItems = sqliteTable(
 
 // --- Orders ---------------------------------------------------------------
 
-export const orders = sqliteTable(
+export const orders = pgTable(
   "orders",
   {
     id: id(),
@@ -204,14 +210,12 @@ export const orders = sqliteTable(
     title: text("title").notNull().default(""),
     invoiceMessage: text("invoice_message").notNull().default(""),
     // Card-processing surcharge: whether to add it, and the computed amount.
-    applyProcessingFee: integer("apply_processing_fee", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    applyProcessingFee: boolean("apply_processing_fee").notNull().default(false),
     processingFeeCents: integer("processing_fee_cents").notNull().default(0),
     // The ACTUAL fee Square charged, read back after the payment settles.
     squareProcessingFeeCents: integer("square_processing_fee_cents"),
     // Optional promised/due date — the axis the production dashboard sorts on.
-    dueDate: integer("due_date", { mode: "timestamp_ms" }),
+    dueDate: timestamp("due_date", { mode: "date" }),
     // UPS tracking number (entered manually, or discovered via Quantum View).
     trackingNumber: text("tracking_number").notNull().default(""),
     // Latest UPS delivery status, e.g. "Picked up", "In transit", "Delivered".
@@ -234,7 +238,7 @@ export const orders = sqliteTable(
   (t) => [index("orders_contact_idx").on(t.contactId)]
 );
 
-export const orderLineItems = sqliteTable(
+export const orderLineItems = pgTable(
   "order_line_items",
   {
     id: id(),
@@ -255,7 +259,7 @@ export const orderLineItems = sqliteTable(
   (t) => [index("order_line_items_order_idx").on(t.orderId)]
 );
 
-export const orderStatusHistory = sqliteTable(
+export const orderStatusHistory = pgTable(
   "order_status_history",
   {
     id: id(),
@@ -272,7 +276,7 @@ export const orderStatusHistory = sqliteTable(
 
 // --- Payments -------------------------------------------------------------
 
-export const payments = sqliteTable(
+export const payments = pgTable(
   "payments",
   {
     id: id(),
@@ -302,7 +306,7 @@ export const payments = sqliteTable(
 
 // --- Documents (DocuSeal e-signatures) -----------------------------------
 
-export const documents = sqliteTable(
+export const documents = pgTable(
   "documents",
   {
     id: id(),
@@ -320,14 +324,14 @@ export const documents = sqliteTable(
     signerEmail: text("signer_email").notNull().default(""),
     signedPdfPath: text("signed_pdf_path"),
     createdAt: createdAt(),
-    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    completedAt: timestamp("completed_at", { mode: "date" }),
   },
   (t) => [index("documents_order_idx").on(t.orderId)]
 );
 
 // --- Webhook events (idempotency + audit for inbound provider calls) ------
 
-export const webhookEvents = sqliteTable(
+export const webhookEvents = pgTable(
   "webhook_events",
   {
     id: id(),
@@ -335,7 +339,7 @@ export const webhookEvents = sqliteTable(
     eventId: text("event_id").notNull(),
     eventType: text("event_type").notNull().default(""),
     payload: text("payload").notNull().default(""),
-    processed: integer("processed", { mode: "boolean" }).notNull().default(false),
+    processed: boolean("processed").notNull().default(false),
     receivedAt: createdAt(),
   },
   (t) => [unique("webhook_events_uq").on(t.provider, t.eventId)]
@@ -343,7 +347,7 @@ export const webhookEvents = sqliteTable(
 
 // --- Personal notes (single-user scratchpad) ------------------------------
 
-export const notes = sqliteTable(
+export const notes = pgTable(
   "notes",
   {
     id: id(),
@@ -352,7 +356,7 @@ export const notes = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull().default(""),
     body: text("body").notNull().default(""),
-    pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
+    pinned: boolean("pinned").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -360,7 +364,7 @@ export const notes = sqliteTable(
 );
 
 // A tiny counter table so order numbers are sequential & human-friendly.
-export const counters = sqliteTable("counters", {
+export const counters = pgTable("counters", {
   name: text("name").primaryKey(),
   value: integer("value").notNull().default(0),
 });

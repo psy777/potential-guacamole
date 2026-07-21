@@ -31,12 +31,14 @@ export async function getCurrentUser(): Promise<User | null> {
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const row = await db
-    .select({ user: users })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(sessions.id, token), gt(sessions.expiresAt, new Date())))
-    .get();
+  const row = (
+    await db
+      .select({ user: users })
+      .from(sessions)
+      .innerJoin(users, eq(sessions.userId, users.id))
+      .where(and(eq(sessions.id, token), gt(sessions.expiresAt, new Date())))
+      .limit(1)
+  )[0];
 
   if (!row || !row.user.active) return null;
   return row.user;

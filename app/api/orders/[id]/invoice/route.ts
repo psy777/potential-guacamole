@@ -15,13 +15,13 @@ export async function GET(
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   const { id } = await params;
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) return new NextResponse("Not found", { status: 404 });
 
   const balance = order.totalCents - order.amountPaidCents;
   const payUrl =
     balance > 0 ? (await ensurePaymentLink(order, order.contact)) ?? undefined : undefined;
-  const pdf = await renderInvoicePdf(order, getSettings(), payUrl);
+  const pdf = await renderInvoicePdf(order, await getSettings(), payUrl);
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

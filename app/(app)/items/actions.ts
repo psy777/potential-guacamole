@@ -52,7 +52,7 @@ export async function createItemAction(fd: FormData) {
   const user = await requireUser();
   const input = parse(fd);
   if (!input.name) redirect("/items/new?error=1");
-  const item = createItem(input);
+  const item = await createItem(input);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -68,7 +68,7 @@ export async function createItemAction(fd: FormData) {
 export async function updateItemAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  updateItem(id, parse(fd));
+  await updateItem(id, parse(fd));
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -106,7 +106,7 @@ export async function bulkCreateItemsAction(fd: FormData) {
   for (const line of lines) {
     const [namePart, pricePart, catPart] = line.split(",").map((s) => (s ?? "").trim());
     if (!namePart) continue;
-    createItem({
+    await createItem({
       name: namePart,
       description: "",
       category: catPart || "",

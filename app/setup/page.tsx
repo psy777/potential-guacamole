@@ -7,7 +7,7 @@ export default async function SetupPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  if (userCount() > 0) redirect("/login");
+  if ((await userCount()) > 0) redirect("/login");
   const { error } = await searchParams;
 
   return (

@@ -5,16 +5,16 @@ import { webhookEvents } from "@/lib/db/schema";
  * Record an inbound webhook event. Returns false if we've already seen this
  * (provider, eventId) pair — callers should skip processing duplicates.
  */
-export function rememberWebhook(
+export async function rememberWebhook(
   provider: string,
   eventId: string,
   eventType: string,
   payload: string
-): boolean {
-  const result = db
+): Promise<boolean> {
+  const inserted = await db
     .insert(webhookEvents)
     .values({ provider, eventId, eventType, payload })
     .onConflictDoNothing()
-    .run();
-  return result.changes > 0;
+    .returning();
+  return inserted.length > 0;
 }

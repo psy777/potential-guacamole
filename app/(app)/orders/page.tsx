@@ -11,7 +11,7 @@ export default async function OrdersPage({
   searchParams: Promise<{ status?: string; q?: string }>;
 }) {
   const { status, q } = await searchParams;
-  const orders = listOrders({ status: status || undefined, search: q });
+  const orders = await listOrders({ status: status || undefined, search: q });
 
   return (
     <>

@@ -41,15 +41,15 @@ export const stripeProvider: PaymentProvider = {
       metadata: { orderId: order.id, orderNumber: order.number },
     });
 
-    db.update(orders)
+    await db
+      .update(orders)
       .set({
         stripeCheckoutId: session.id,
         paymentLinkUrl: session.url ?? null,
         paymentLinkProvider: "stripe",
         paymentLinkAmountCents: amountCents,
       })
-      .where(eq(orders.id, order.id))
-      .run();
+      .where(eq(orders.id, order.id));
 
     return { url: session.url ?? "", providerRef: session.id };
   },
@@ -66,7 +66,7 @@ export const stripeProvider: PaymentProvider = {
     const paymentId =
       typeof pi === "string" ? pi : pi?.id ?? session.id;
 
-    upsertProviderPayment({
+    await upsertProviderPayment({
       orderId: order.id,
       provider: "stripe",
       providerPaymentId: paymentId,

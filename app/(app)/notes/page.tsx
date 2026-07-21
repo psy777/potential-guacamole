@@ -9,7 +9,7 @@ import {
 
 export default async function NotesPage() {
   const user = await requireUser();
-  const notes = listNotes(user.id);
+  const notes = await listNotes(user.id);
 
   return (
     <>

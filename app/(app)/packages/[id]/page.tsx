@@ -11,9 +11,9 @@ export default async function EditPackagePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const pkg = getPackage(id);
+  const pkg = await getPackage(id);
   if (!pkg) notFound();
-  const items = listItems().filter((i) => i.active);
+  const items = (await listItems()).filter((i) => i.active);
 
   return (
     <>

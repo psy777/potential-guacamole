@@ -3,7 +3,7 @@ import { listPackages, packagePriceCents } from "@/lib/services/packages";
 import { formatMoney } from "@/lib/money";
 
 export default async function PackagesPage() {
-  const packages = listPackages();
+  const packages = await listPackages();
 
   return (
     <>

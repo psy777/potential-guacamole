@@ -52,20 +52,17 @@ export async function ensurePaymentLink(
 export async function reconcileOpenPayments(): Promise<void> {
   if (!enabledProviders().length) return;
 
-  const openOrders = db
-    .select()
-    .from(orders)
-    .where(
-      and(
-        or(
-          isNotNull(orders.stripeCheckoutId),
-          isNotNull(orders.squareOrderId)
-        ),
-        ne(orders.status, "cancelled")
+  const openOrders = (
+    await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          or(isNotNull(orders.stripeCheckoutId), isNotNull(orders.squareOrderId)),
+          ne(orders.status, "cancelled")
+        )
       )
-    )
-    .all()
-    .filter((o) => o.amountPaidCents < o.totalCents);
+  ).filter((o) => o.amountPaidCents < o.totalCents);
 
   for (const order of openOrders) {
     for (const provider of enabledProviders()) {
@@ -82,7 +79,7 @@ export async function reconcileOpenPayments(): Promise<void> {
 }
 
 export async function reconcileOrder(orderId: string): Promise<void> {
-  const order = db.select().from(orders).where(eq(orders.id, orderId)).get();
+  const order = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
   if (!order) return;
   for (const provider of enabledProviders()) {
     try {

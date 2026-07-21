@@ -42,7 +42,7 @@ export async function createPackageAction(fd: FormData) {
   const user = await requireUser();
   const input = parse(fd);
   if (!input.name) redirect("/packages/new?error=1");
-  const pkg = createPackage(input);
+  const pkg = await createPackage(input);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -58,7 +58,7 @@ export async function createPackageAction(fd: FormData) {
 export async function updatePackageAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  updatePackage(id, parse(fd));
+  await updatePackage(id, parse(fd));
   await recordAudit({
     userId: user.id,
     userName: user.name,

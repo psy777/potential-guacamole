@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     // ignore
   }
 
-  if (eventId && !rememberWebhook("square", eventId, eventType, body)) {
+  if (eventId && !(await rememberWebhook("square", eventId, eventType, body))) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 

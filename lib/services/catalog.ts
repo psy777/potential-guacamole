@@ -21,8 +21,9 @@ export type CatalogGroup = {
   picks: CatalogPick[];
 };
 
-export function catalogGroups(): CatalogGroup[] {
-  const itemGroups: CatalogGroup[] = listItems()
+export async function catalogGroups(): Promise<CatalogGroup[]> {
+  const [allItems, allPackages] = await Promise.all([listItems(), listPackages()]);
+  const itemGroups: CatalogGroup[] = allItems
     .filter((i) => i.active)
     .map((item) => {
       const variations = item.variations.filter((v) => v.active);
@@ -50,7 +51,7 @@ export function catalogGroups(): CatalogGroup[] {
       return { key: `item:${item.id}`, kind: "item", id: item.id, name: item.name, picks };
     });
 
-  const pkgGroups: CatalogGroup[] = listPackages()
+  const pkgGroups: CatalogGroup[] = allPackages
     .filter((p) => p.active)
     .map((p) => ({
       key: `package:${p.id}`,

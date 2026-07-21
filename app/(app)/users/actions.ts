@@ -29,7 +29,7 @@ export async function createUserAction(fd: FormData) {
   if (!name || !email || password.length < 8) {
     redirect("/users?err=" + encodeURIComponent("Name, email, and an 8+ char password are required."));
   }
-  if (getUserByEmail(email)) {
+  if (await getUserByEmail(email)) {
     redirect("/users?err=" + encodeURIComponent("A user with that email already exists."));
   }
 

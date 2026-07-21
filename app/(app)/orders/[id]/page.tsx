@@ -45,10 +45,10 @@ export default async function OrderDetailPage({
 }) {
   const { id } = await params;
   const { msg, err } = await searchParams;
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) notFound();
 
-  const settings = getSettings();
+  const settings = await getSettings();
   const providers = enabledProviders();
   const fullyPaid =
     order.totalCents > 0 && order.amountPaidCents >= order.totalCents;

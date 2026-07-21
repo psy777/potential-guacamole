@@ -20,7 +20,7 @@ function fmtDate(date: Date | null): string {
 }
 
 export default async function Dashboard() {
-  const { make, schedule, counts, money } = getDashboard();
+  const { make, schedule, counts, money } = await getDashboard();
 
   return (
     <>

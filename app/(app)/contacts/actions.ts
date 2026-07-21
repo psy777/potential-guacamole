@@ -36,7 +36,7 @@ export async function createContactAction(fd: FormData) {
   const user = await requireUser();
   const input = parse(fd);
   if (!input.companyName) redirect("/contacts/new?error=1");
-  const c = createContact(input);
+  const c = await createContact(input);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -52,7 +52,7 @@ export async function createContactAction(fd: FormData) {
 export async function updateContactAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  updateContact(id, parse(fd));
+  await updateContact(id, parse(fd));
   await recordAudit({
     userId: user.id,
     userName: user.name,

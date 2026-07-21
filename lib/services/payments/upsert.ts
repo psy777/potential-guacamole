@@ -7,7 +7,7 @@ import { recomputeOrderPaid } from "@/lib/services/orders";
  * the idempotency point that lets polling and webhooks run together safely —
  * recording the same provider payment twice is a no-op.
  */
-export function upsertProviderPayment(input: {
+export async function upsertProviderPayment(input: {
   orderId: string;
   provider: "stripe" | "square";
   providerPaymentId: string;
@@ -16,8 +16,9 @@ export function upsertProviderPayment(input: {
   status: "pending" | "succeeded" | "failed" | "refunded";
   method?: string;
   raw?: unknown;
-}): void {
-  db.insert(payments)
+}): Promise<void> {
+  await db
+    .insert(payments)
     .values({
       orderId: input.orderId,
       provider: input.provider,
@@ -35,8 +36,7 @@ export function upsertProviderPayment(input: {
         status: input.status,
         providerRaw: input.raw ? JSON.stringify(input.raw) : null,
       },
-    })
-    .run();
+    });
 
-  recomputeOrderPaid(input.orderId);
+  await recomputeOrderPaid(input.orderId);
 }

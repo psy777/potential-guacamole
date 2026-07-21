@@ -59,16 +59,14 @@ export async function requestSignature(
     // The submissions endpoint returns an array of submitters sharing one submission_id.
     const submissionId = String(submitters?.[0]?.submission_id ?? "");
 
-    db.insert(documents)
-      .values({
-        orderId: order.id,
-        provider: "docuseal",
-        templateId: docusealConfig.templateId,
-        submissionId,
-        status: "pending",
-        signerEmail,
-      })
-      .run();
+    await db.insert(documents).values({
+      orderId: order.id,
+      provider: "docuseal",
+      templateId: docusealConfig.templateId,
+      submissionId,
+      status: "pending",
+      signerEmail,
+    });
 
     return { ok: true };
   } catch (err) {
@@ -104,26 +102,25 @@ export async function syncDocument(doc: {
         console.error("[docuseal] failed to download signed PDF:", err);
       }
     }
-    db.update(documents)
+    await db
+      .update(documents)
       .set({ status: "completed", completedAt: new Date(), signedPdfPath })
-      .where(eq(documents.id, doc.id))
-      .run();
+      .where(eq(documents.id, doc.id));
   } else if (status === "declined" || status === "expired") {
-    db.update(documents)
+    await db
+      .update(documents)
       .set({ status: status as "declined" | "expired" })
-      .where(eq(documents.id, doc.id))
-      .run();
+      .where(eq(documents.id, doc.id));
   }
 }
 
 /** Poll all pending DocuSeal submissions. */
 export async function reconcileOpenDocuments(): Promise<void> {
   if (!docusealConfig.isConfigured) return;
-  const pending = db
+  const pending = await db
     .select()
     .from(documents)
-    .where(and(eq(documents.status, "pending"), ne(documents.provider, "")))
-    .all();
+    .where(and(eq(documents.status, "pending"), ne(documents.provider, "")));
   for (const doc of pending) {
     try {
       await syncDocument(doc);

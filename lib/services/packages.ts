@@ -19,18 +19,12 @@ export type PackageInput = {
 export type PackageMember = { itemId: string; quantity: number; item: Item };
 export type PackageWithMembers = Package & { members: PackageMember[] };
 
-export function listPackages(): PackageWithMembers[] {
-  const rows = db.select().from(packages).orderBy(asc(packages.name)).all();
-  return rows.map((p) => ({ ...p, members: getPackageMembers(p.id) }));
-}
-
-export function getPackageMembers(packageId: string): PackageMember[] {
-  const rows = db
+export async function getPackageMembers(packageId: string): Promise<PackageMember[]> {
+  const rows = await db
     .select({ member: packageItems, item: items })
     .from(packageItems)
     .innerJoin(items, eq(packageItems.itemId, items.id))
-    .where(eq(packageItems.packageId, packageId))
-    .all();
+    .where(eq(packageItems.packageId, packageId));
   return rows.map((r) => ({
     itemId: r.item.id,
     quantity: r.member.quantity,
@@ -38,65 +32,70 @@ export function getPackageMembers(packageId: string): PackageMember[] {
   }));
 }
 
-export function getPackage(id: string): PackageWithMembers | undefined {
-  const p = db.select().from(packages).where(eq(packages.id, id)).get();
+export async function listPackages(): Promise<PackageWithMembers[]> {
+  const rows = await db.select().from(packages).orderBy(asc(packages.name));
+  return Promise.all(
+    rows.map(async (p) => ({ ...p, members: await getPackageMembers(p.id) }))
+  );
+}
+
+export async function getPackage(id: string): Promise<PackageWithMembers | undefined> {
+  const p = (await db.select().from(packages).where(eq(packages.id, id)).limit(1))[0];
   if (!p) return undefined;
-  return { ...p, members: getPackageMembers(id) };
+  return { ...p, members: await getPackageMembers(id) };
 }
 
 /** Total price of a package = sum of member item prices * quantities (cents). */
 export function packagePriceCents(pkg: PackageWithMembers): number {
-  return pkg.members.reduce(
-    (sum, m) => sum + m.item.priceCents * m.quantity,
-    0
-  );
+  return pkg.members.reduce((sum, m) => sum + m.item.priceCents * m.quantity, 0);
 }
 
-export function createPackage(input: PackageInput): PackageWithMembers {
-  return db.transaction((tx) => {
-    const pkg = tx
-      .insert(packages)
-      .values({
-        name: input.name,
-        description: input.description,
-        active: input.active,
-      })
-      .returning()
-      .get();
+export async function createPackage(input: PackageInput): Promise<PackageWithMembers> {
+  const pkgId = await db.transaction(async (tx) => {
+    const pkg = (
+      await tx
+        .insert(packages)
+        .values({
+          name: input.name,
+          description: input.description,
+          active: input.active,
+        })
+        .returning()
+    )[0];
     for (const m of input.members) {
-      tx.insert(packageItems)
-        .values({ packageId: pkg.id, itemId: m.itemId, quantity: m.quantity })
-        .run();
+      await tx
+        .insert(packageItems)
+        .values({ packageId: pkg.id, itemId: m.itemId, quantity: m.quantity });
     }
-    return { ...pkg, members: getPackageMembers(pkg.id) };
+    return pkg.id;
   });
+  return (await getPackage(pkgId))!;
 }
 
-export function updatePackage(
+export async function updatePackage(
   id: string,
   input: PackageInput
-): PackageWithMembers | undefined {
-  return db.transaction((tx) => {
-    tx.update(packages)
+): Promise<PackageWithMembers | undefined> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(packages)
       .set({
         name: input.name,
         description: input.description,
         active: input.active,
         updatedAt: new Date(),
       })
-      .where(eq(packages.id, id))
-      .run();
-    tx.delete(packageItems).where(eq(packageItems.packageId, id)).run();
+      .where(eq(packages.id, id));
+    await tx.delete(packageItems).where(eq(packageItems.packageId, id));
     for (const m of input.members) {
-      tx.insert(packageItems)
-        .values({ packageId: id, itemId: m.itemId, quantity: m.quantity })
-        .run();
+      await tx
+        .insert(packageItems)
+        .values({ packageId: id, itemId: m.itemId, quantity: m.quantity });
     }
-    const p = tx.select().from(packages).where(eq(packages.id, id)).get();
-    return p ? { ...p, members: getPackageMembers(id) } : undefined;
   });
+  return getPackage(id);
 }
 
-export function deletePackage(id: string): void {
-  db.delete(packages).where(eq(packages.id, id)).run();
+export async function deletePackage(id: string): Promise<void> {
+  await db.delete(packages).where(eq(packages.id, id));
 }

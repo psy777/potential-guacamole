@@ -10,7 +10,7 @@ export default async function EditItemPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const item = getItem(id);
+  const item = await getItem(id);
   if (!item) notFound();
 
   return (
@@ -24,7 +24,7 @@ export default async function EditItemPage({
           className="btn danger btn-sm"
         />
       </div>
-      <ItemForm action={updateItemAction} item={item} categories={listCategories()} />
+      <ItemForm action={updateItemAction} item={item} categories={await listCategories()} />
     </>
   );
 }

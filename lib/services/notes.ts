@@ -2,47 +2,47 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notes, type Note } from "@/lib/db/schema";
 
-export function listNotes(userId: string): Note[] {
+export async function listNotes(userId: string): Promise<Note[]> {
   return db
     .select()
     .from(notes)
     .where(eq(notes.userId, userId))
-    .orderBy(desc(notes.pinned), desc(notes.updatedAt))
-    .all();
+    .orderBy(desc(notes.pinned), desc(notes.updatedAt));
 }
 
-export function getNote(userId: string, id: string): Note | undefined {
-  return db
-    .select()
-    .from(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-    .get();
+export async function getNote(userId: string, id: string): Promise<Note | undefined> {
+  return (
+    await db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, id), eq(notes.userId, userId)))
+      .limit(1)
+  )[0];
 }
 
-export function createNote(
+export async function createNote(
   userId: string,
   input: { title: string; body: string }
-): Note {
-  return db
-    .insert(notes)
-    .values({ userId, title: input.title, body: input.body })
-    .returning()
-    .get();
+): Promise<Note> {
+  return (
+    await db
+      .insert(notes)
+      .values({ userId, title: input.title, body: input.body })
+      .returning()
+  )[0];
 }
 
-export function updateNote(
+export async function updateNote(
   userId: string,
   id: string,
   input: Partial<{ title: string; body: string; pinned: boolean }>
-): void {
-  db.update(notes)
+): Promise<void> {
+  await db
+    .update(notes)
     .set({ ...input, updatedAt: new Date() })
-    .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-    .run();
+    .where(and(eq(notes.id, id), eq(notes.userId, userId)));
 }
 
-export function deleteNote(userId: string, id: string): void {
-  db.delete(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, userId)))
-    .run();
+export async function deleteNote(userId: string, id: string): Promise<void> {
+  await db.delete(notes).where(and(eq(notes.id, id), eq(notes.userId, userId)));
 }

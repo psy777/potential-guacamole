@@ -7,11 +7,12 @@ export type ContactInput = Omit<
   "id" | "createdAt" | "updatedAt" | "stripeCustomerId" | "squareCustomerId"
 >;
 
-export function listContacts(search?: string): Contact[] {
-  const q = db.select().from(contacts);
+export async function listContacts(search?: string): Promise<Contact[]> {
   if (search && search.trim()) {
     const term = `%${search.trim()}%`;
-    return q
+    return db
+      .select()
+      .from(contacts)
       .where(
         or(
           like(contacts.companyName, term),
@@ -19,31 +20,30 @@ export function listContacts(search?: string): Contact[] {
           like(contacts.email, term)
         )
       )
-      .orderBy(desc(contacts.updatedAt))
-      .all();
+      .orderBy(desc(contacts.updatedAt));
   }
-  return q.orderBy(desc(contacts.updatedAt)).all();
+  return db.select().from(contacts).orderBy(desc(contacts.updatedAt));
 }
 
-export function getContact(id: string): Contact | undefined {
-  return db.select().from(contacts).where(eq(contacts.id, id)).get();
+export async function getContact(id: string): Promise<Contact | undefined> {
+  return (await db.select().from(contacts).where(eq(contacts.id, id)).limit(1))[0];
 }
 
-export function createContact(input: ContactInput): Contact {
-  return db.insert(contacts).values(input).returning().get();
+export async function createContact(input: ContactInput): Promise<Contact> {
+  return (await db.insert(contacts).values(input).returning())[0];
 }
 
-export function updateContact(
+export async function updateContact(
   id: string,
   input: Partial<ContactInput>
-): Contact | undefined {
-  db.update(contacts)
+): Promise<Contact | undefined> {
+  await db
+    .update(contacts)
     .set({ ...input, updatedAt: new Date() })
-    .where(eq(contacts.id, id))
-    .run();
+    .where(eq(contacts.id, id));
   return getContact(id);
 }
 
-export function deleteContact(id: string): void {
-  db.delete(contacts).where(eq(contacts.id, id)).run();
+export async function deleteContact(id: string): Promise<void> {
+  await db.delete(contacts).where(eq(contacts.id, id));
 }

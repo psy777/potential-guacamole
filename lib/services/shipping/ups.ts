@@ -222,11 +222,10 @@ function orderLookup(rows: Order[]): Map<string, Order> {
 export async function reconcileShipments(): Promise<void> {
   if (!upsConfig.isConfigured) return;
 
-  const active = db
+  const active = await db
     .select()
     .from(orders)
-    .where(ne(orders.status, "cancelled"))
-    .all();
+    .where(ne(orders.status, "cancelled"));
 
   // 1) Quantum View discovery — match by reference, capture tracking, mark shipped.
   try {
@@ -239,15 +238,15 @@ export async function reconcileShipments(): Promise<void> {
         if (order) break;
       }
       if (!order) continue;
-      db.update(orders)
+      await db
+        .update(orders)
         .set({
           trackingNumber: order.trackingNumber || s.trackingNumber,
           trackingStatus: statusLabel(s.event),
         })
-        .where(eq(orders.id, order.id))
-        .run();
+        .where(eq(orders.id, order.id));
       if ((s.event === "origin" || s.event === "delivery") && order.status === "open") {
-        setOrderStatus(order.id, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${s.event})`);
+        await setOrderStatus(order.id, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${s.event})`);
       }
     }
   } catch (err) {
@@ -260,12 +259,12 @@ export async function reconcileShipments(): Promise<void> {
     try {
       const r = await trackByNumber(o.trackingNumber);
       if (!r) continue;
-      db.update(orders)
+      await db
+        .update(orders)
         .set({ trackingStatus: r.delivered ? `Delivered · ${r.description}` : r.description })
-        .where(eq(orders.id, o.id))
-        .run();
+        .where(eq(orders.id, o.id));
       if (o.status === "open" && (r.inTransit || r.delivered)) {
-        setOrderStatus(o.id, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${r.description})`);
+        await setOrderStatus(o.id, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${r.description})`);
       }
     } catch (err) {
       console.error(`[ups] track ${o.number}:`, (err as Error).message);
@@ -275,15 +274,15 @@ export async function reconcileShipments(): Promise<void> {
 
 /** Refresh one order's tracking status now (manual "Sync" button). */
 export async function syncOrderTracking(orderId: string): Promise<void> {
-  const o = db.select().from(orders).where(eq(orders.id, orderId)).get();
+  const o = (await db.select().from(orders).where(eq(orders.id, orderId)).limit(1))[0];
   if (!o?.trackingNumber || !upsConfig.isConfigured) return;
   const r = await trackByNumber(o.trackingNumber);
   if (!r) return;
-  db.update(orders)
+  await db
+    .update(orders)
     .set({ trackingStatus: r.delivered ? `Delivered · ${r.description}` : r.description })
-    .where(eq(orders.id, orderId))
-    .run();
+    .where(eq(orders.id, orderId));
   if (o.status === "open" && (r.inTransit || r.delivered)) {
-    setOrderStatus(orderId, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${r.description})`);
+    await setOrderStatus(orderId, "shipped", { name: "UPS" }, `Auto-shipped via UPS (${r.description})`);
   }
 }

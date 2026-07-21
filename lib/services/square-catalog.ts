@@ -84,10 +84,10 @@ export function mapSquareItem(
 
 // --- DB upsert (keyed by Square IDs, so re-imports update in place) -------
 
-export function upsertMappedItems(mapped: MappedItem[]): {
+export async function upsertMappedItems(mapped: MappedItem[]): Promise<{
   created: number;
   updated: number;
-} {
+}> {
   let created = 0;
   let updated = 0;
 
@@ -98,16 +98,19 @@ export function upsertMappedItems(mapped: MappedItem[]): {
         : [{ name: "Regular", sku: "", gtin: "", priceCents: 0, squareVariationId: `${m.squareCatalogId}-default` }];
     const base = variations[0];
 
-    const existing = db
-      .select()
-      .from(items)
-      .where(eq(items.squareCatalogId, m.squareCatalogId))
-      .get();
+    const existing = (
+      await db
+        .select()
+        .from(items)
+        .where(eq(items.squareCatalogId, m.squareCatalogId))
+        .limit(1)
+    )[0];
 
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       let itemId: string;
       if (existing) {
-        tx.update(items)
+        await tx
+          .update(items)
           .set({
             name: m.name,
             description: m.description,
@@ -117,43 +120,42 @@ export function upsertMappedItems(mapped: MappedItem[]): {
             priceCents: base.priceCents,
             updatedAt: new Date(),
           })
-          .where(eq(items.id, existing.id))
-          .run();
-        tx.delete(itemVariations).where(eq(itemVariations.itemId, existing.id)).run();
+          .where(eq(items.id, existing.id));
+        await tx.delete(itemVariations).where(eq(itemVariations.itemId, existing.id));
         itemId = existing.id;
         updated += 1;
       } else {
-        const row = tx
-          .insert(items)
-          .values({
-            name: m.name,
-            description: m.description,
-            category: m.category,
-            currency: m.currency,
-            active: true,
-            sku: base.sku,
-            priceCents: base.priceCents,
-            squareCatalogId: m.squareCatalogId,
-          })
-          .returning()
-          .get();
+        const row = (
+          await tx
+            .insert(items)
+            .values({
+              name: m.name,
+              description: m.description,
+              category: m.category,
+              currency: m.currency,
+              active: true,
+              sku: base.sku,
+              priceCents: base.priceCents,
+              squareCatalogId: m.squareCatalogId,
+            })
+            .returning()
+        )[0];
         itemId = row.id;
         created += 1;
       }
 
-      variations.forEach((v, i) => {
-        tx.insert(itemVariations)
-          .values({
-            itemId,
-            name: v.name,
-            sku: v.sku,
-            gtin: v.gtin,
-            priceCents: v.priceCents,
-            position: i,
-            squareVariationId: v.squareVariationId,
-          })
-          .run();
-      });
+      for (let i = 0; i < variations.length; i++) {
+        const v = variations[i];
+        await tx.insert(itemVariations).values({
+          itemId,
+          name: v.name,
+          sku: v.sku,
+          gtin: v.gtin,
+          priceCents: v.priceCents,
+          position: i,
+          squareVariationId: v.squareVariationId,
+        });
+      }
     });
   }
 
@@ -209,5 +211,5 @@ export async function importSquareCatalog(): Promise<{
   }
   const { itemObjs, categoryNames } = await fetchCatalogObjects();
   const mapped = itemObjs.map((o) => mapSquareItem(o, categoryNames));
-  return upsertMappedItems(mapped);
+  return await upsertMappedItems(mapped);
 }

@@ -45,21 +45,20 @@ function byDueDate(a: Date | null, b: Date | null): number {
   return 0;
 }
 
-function rowsFor(status: Order["status"]): ScheduleRow[] {
-  return db
+async function rowsFor(status: Order["status"]): Promise<ScheduleRow[]> {
+  const rows = await db
     .select({ o: orders, contactName: contacts.companyName })
     .from(orders)
     .leftJoin(contacts, eq(orders.contactId, contacts.id))
-    .where(eq(orders.status, status))
-    .all()
-    .map((r) => ({
-      ...r.o,
-      contactName: r.contactName,
-      balanceCents: Math.max(0, r.o.totalCents - r.o.amountPaidCents),
-    }));
+    .where(eq(orders.status, status));
+  return rows.map((r) => ({
+    ...r.o,
+    contactName: r.contactName,
+    balanceCents: Math.max(0, r.o.totalCents - r.o.amountPaidCents),
+  }));
 }
 
-export function getDashboard(): DashboardData {
+export async function getDashboard(): Promise<DashboardData> {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const weekAhead = new Date(startOfToday);
@@ -67,7 +66,7 @@ export function getDashboard(): DashboardData {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   // "Open" orders are the production backlog — the things still to make & ship.
-  const open = rowsFor("open");
+  const open = await rowsFor("open");
   const schedule = [...open].sort((a, b) => byDueDate(a.dueDate, b.dueDate));
   const overdue = open.filter((o) => o.dueDate && o.dueDate < startOfToday);
   const dueThisWeek = open.filter(
@@ -76,26 +75,26 @@ export function getDashboard(): DashboardData {
 
   // Shipped-but-not-invoiced = "send the bill." Invoiced-unpaid = "chase payment."
   const toInvoice =
-    db
-      .select({ n: sql<number>`count(*)` })
-      .from(orders)
-      .where(eq(orders.status, "shipped"))
-      .get()?.n ?? 0;
-  const invoiced = rowsFor("invoiced");
+    (
+      await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(orders)
+        .where(eq(orders.status, "shipped"))
+    )[0]?.n ?? 0;
+  const invoiced = await rowsFor("invoiced");
   const awaitingPayment = invoiced.filter((o) => o.balanceCents > 0).length;
   const outstandingCents = invoiced.reduce((s, o) => s + o.balanceCents, 0);
 
   const collectedThisMonthCents =
-    db
-      .select({ t: sql<number>`coalesce(sum(${payments.amountCents}), 0)` })
-      .from(payments)
-      .where(
-        and(eq(payments.status, "succeeded"), gte(payments.createdAt, startOfMonth))
-      )
-      .get()?.t ?? 0;
+    (
+      await db
+        .select({ t: sql<number>`coalesce(sum(${payments.amountCents}), 0)::int` })
+        .from(payments)
+        .where(and(eq(payments.status, "succeeded"), gte(payments.createdAt, startOfMonth)))
+    )[0]?.t ?? 0;
 
   return {
-    make: aggregateMake(open),
+    make: await aggregateMake(open),
     schedule,
     counts: {
       overdue: overdue.length,
@@ -108,10 +107,10 @@ export function getDashboard(): DashboardData {
 }
 
 /** Aggregate line-item demand across the open orders, grouped by description. */
-function aggregateMake(open: ScheduleRow[]): MakeLine[] {
+async function aggregateMake(open: ScheduleRow[]): Promise<MakeLine[]> {
   if (open.length === 0) return [];
   const orderById = new Map(open.map((o) => [o.id, o]));
-  const lines = db
+  const lines = await db
     .select()
     .from(orderLineItems)
     .where(
@@ -119,8 +118,7 @@ function aggregateMake(open: ScheduleRow[]): MakeLine[] {
         orderLineItems.orderId,
         open.map((o) => o.id)
       )
-    )
-    .all();
+    );
 
   const map = new Map<string, MakeLine>();
   for (const l of lines) {

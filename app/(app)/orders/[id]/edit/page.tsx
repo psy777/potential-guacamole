@@ -12,13 +12,14 @@ export default async function EditOrderPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) notFound();
 
-  const contacts = listContacts().map((c) => ({
+  const contacts = (await listContacts()).map((c) => ({
     id: c.id,
     companyName: c.companyName,
   }));
+  const [groups, settings] = await Promise.all([catalogGroups(), getSettings()]);
 
   return (
     <>
@@ -26,9 +27,9 @@ export default async function EditOrderPage({
       <OrderForm
         action={updateOrderAction}
         contacts={contacts}
-        groups={catalogGroups()}
+        groups={groups}
         order={order}
-        processingFeePercent={getSettings().processingFeePercent}
+        processingFeePercent={settings.processingFeePercent}
       />
     </>
   );

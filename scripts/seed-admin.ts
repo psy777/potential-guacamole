@@ -5,7 +5,7 @@ import { runMigrations } from "@/lib/db/migrate";
 import { userCount, createUser, getUserByEmail } from "@/lib/auth/users";
 
 async function main() {
-  runMigrations();
+  await runMigrations();
 
   const name = process.env.FIRECOAST_ADMIN_NAME || "Owner";
   const email = process.env.FIRECOAST_ADMIN_EMAIL;
@@ -17,14 +17,14 @@ async function main() {
     );
     process.exit(1);
   }
-  if (getUserByEmail(email)) {
+  if (await getUserByEmail(email)) {
     console.log(`User ${email} already exists — nothing to do.`);
     return;
   }
 
   await createUser({ name, email, password, role: "admin" });
   console.log(
-    `Created admin ${email}. (${userCount()} user(s) total.) You can now sign in.`
+    `Created admin ${email}. (${await userCount()} user(s) total.) You can now sign in.`
   );
 }
 

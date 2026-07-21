@@ -10,7 +10,7 @@ export default async function ItemsPage({
   searchParams: Promise<{ q?: string; msg?: string; err?: string }>;
 }) {
   const { q, msg, err } = await searchParams;
-  const items = listItems(q);
+  const items = await listItems(q);
 
   return (
     <>

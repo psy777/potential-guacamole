@@ -31,16 +31,18 @@ export async function POST(req: Request) {
     return new NextResponse("Bad payload", { status: 400 });
   }
 
-  if (submissionId && !rememberWebhook("docuseal", `${submissionId}:${eventType}`, eventType, body)) {
+  if (submissionId && !(await rememberWebhook("docuseal", `${submissionId}:${eventType}`, eventType, body))) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 
   try {
-    const doc = db
-      .select()
-      .from(documents)
-      .where(eq(documents.submissionId, submissionId))
-      .get();
+    const doc = (
+      await db
+        .select()
+        .from(documents)
+        .where(eq(documents.submissionId, submissionId))
+        .limit(1)
+    )[0];
     if (doc) await syncDocument(doc);
   } catch (err) {
     console.error("[webhook:docuseal]", (err as Error).message);

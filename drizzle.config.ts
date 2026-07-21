@@ -1,11 +1,11 @@
 import type { Config } from "drizzle-kit";
-import { DB_PATH } from "./lib/config";
+import { DATABASE_URL } from "./lib/config";
 
 export default {
   schema: "./lib/db/schema.ts",
   out: "./drizzle",
-  dialect: "sqlite",
+  dialect: "postgresql",
   dbCredentials: {
-    url: DB_PATH,
+    url: DATABASE_URL,
   },
 } satisfies Config;

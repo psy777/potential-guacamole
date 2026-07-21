@@ -6,10 +6,15 @@ import { OrderForm } from "@/components/order-form";
 import { createOrderAction } from "../actions";
 
 export default async function NewOrderPage() {
-  const contacts = listContacts().map((c) => ({
+  const contacts = (await listContacts()).map((c) => ({
     id: c.id,
     companyName: c.companyName,
   }));
+  const [groups, settings, nextInvoiceId] = await Promise.all([
+    catalogGroups(),
+    getSettings(),
+    peekNextInvoiceId(),
+  ]);
 
   return (
     <>
@@ -17,9 +22,9 @@ export default async function NewOrderPage() {
       <OrderForm
         action={createOrderAction}
         contacts={contacts}
-        groups={catalogGroups()}
-        processingFeePercent={getSettings().processingFeePercent}
-        nextInvoiceId={peekNextInvoiceId()}
+        groups={groups}
+        processingFeePercent={settings.processingFeePercent}
+        nextInvoiceId={nextInvoiceId}
       />
     </>
   );

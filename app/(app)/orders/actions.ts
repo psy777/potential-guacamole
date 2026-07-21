@@ -69,7 +69,7 @@ function parseOrder(fd: FormData): OrderInput {
 
 export async function createOrderAction(fd: FormData) {
   const user = await requireUser();
-  const id = createOrder(parseOrder(fd), user);
+  const id = await createOrder(parseOrder(fd), user);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -84,7 +84,7 @@ export async function createOrderAction(fd: FormData) {
 export async function updateOrderAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  updateOrder(id, parseOrder(fd));
+  await updateOrder(id, parseOrder(fd));
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -104,7 +104,7 @@ export async function setStatusAction(fd: FormData) {
   const status = String(fd.get("status"));
   if (!VALID_STATUSES.includes(status)) redirect(`/orders/${id}`);
 
-  setOrderStatus(id, status as Order["status"], user);
+  await setOrderStatus(id, status as Order["status"], user);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -134,7 +134,7 @@ export async function setTrackingAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
   const tracking = String(fd.get("tracking") || "").trim();
-  setTracking(id, tracking);
+  await setTracking(id, tracking);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -150,12 +150,12 @@ export async function setTrackingAction(fd: FormData) {
 export async function manualPaymentAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) redirect("/orders");
   const amountCents = dollarsToCents(String(fd.get("amount") || "0"));
   const method = String(fd.get("method") || "cash");
   if (amountCents > 0) {
-    recordManualPayment(id, amountCents, method, order.currency);
+    await recordManualPayment(id, amountCents, method, order.currency);
     await recordAudit({
       userId: user.id,
       userName: user.name,
@@ -176,7 +176,7 @@ export async function getPaymentLinkAction(
   orderId: string
 ): Promise<{ url?: string; error?: string }> {
   await requireUser();
-  const order = getOrder(orderId);
+  const order = await getOrder(orderId);
   if (!order) return { error: "Order not found." };
   if (!enabledProviders().length) return { error: "No payment provider is configured." };
   const balanceCents = order.totalCents - order.amountPaidCents;
@@ -192,12 +192,12 @@ export async function getPaymentLinkAction(
 export async function emailInvoiceAction(fd: FormData) {
   await requireUser();
   const id = String(fd.get("id"));
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) redirect("/orders");
   if (!order.contact?.email) {
     redirect(`/orders/${id}?err=${encodeURIComponent("This customer has no email address.")}`);
   }
-  const settings = getSettings();
+  const settings = await getSettings();
   const fullyPaid =
     order.totalCents > 0 && order.amountPaidCents >= order.totalCents;
   // Make sure there's a hosted payment link (creates one if a provider is set).
@@ -228,7 +228,7 @@ export async function emailInvoiceAction(fd: FormData) {
     attachment: { filename: `${order.number}.pdf`, content: pdf },
   });
   if (order.status === "open" || order.status === "shipped") {
-    setOrderStatus(id, "invoiced", { name: "System" }, "Invoice emailed");
+    await setOrderStatus(id, "invoiced", { name: "System" }, "Invoice emailed");
   }
   revalidatePath(`/orders/${id}`);
   redirect(
@@ -243,7 +243,7 @@ export async function emailInvoiceAction(fd: FormData) {
 export async function requestSignatureAction(fd: FormData) {
   await requireUser();
   const id = String(fd.get("id"));
-  const order = getOrder(id);
+  const order = await getOrder(id);
   if (!order) redirect("/orders");
   const signerEmail =
     String(fd.get("signerEmail") || "").trim() || order.contact?.email || "";
@@ -264,7 +264,7 @@ export async function requestSignatureAction(fd: FormData) {
 export async function deleteOrderAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  deleteOrder(id);
+  await deleteOrder(id);
   await recordAudit({
     userId: user.id,
     userName: user.name,

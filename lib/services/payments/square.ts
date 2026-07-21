@@ -59,7 +59,8 @@ export const squareProvider: PaymentProvider = {
     });
 
     const link = json.payment_link;
-    db.update(orders)
+    await db
+      .update(orders)
       .set({
         squarePaymentLinkId: link.id,
         squareOrderId: link.order_id ?? null,
@@ -67,8 +68,7 @@ export const squareProvider: PaymentProvider = {
         paymentLinkProvider: "square",
         paymentLinkAmountCents: amountCents,
       })
-      .where(eq(orders.id, order.id))
-      .run();
+      .where(eq(orders.id, order.id));
 
     return { url: link.url, providerRef: link.id };
   },
@@ -86,7 +86,7 @@ export const squareProvider: PaymentProvider = {
 
     let actualFeeCents = 0;
     for (const tender of tenders) {
-      upsertProviderPayment({
+      await upsertProviderPayment({
         orderId: order.id,
         provider: "square",
         providerPaymentId: tender.id,
@@ -113,10 +113,10 @@ export const squareProvider: PaymentProvider = {
     }
 
     if (actualFeeCents > 0) {
-      db.update(orders)
+      await db
+        .update(orders)
         .set({ squareProcessingFeeCents: actualFeeCents })
-        .where(eq(orders.id, order.id))
-        .run();
+        .where(eq(orders.id, order.id));
     }
   },
 };

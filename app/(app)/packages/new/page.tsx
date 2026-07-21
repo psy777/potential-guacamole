@@ -8,7 +8,7 @@ export default async function NewPackagePage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const items = listItems().filter((i) => i.active);
+  const items = (await listItems()).filter((i) => i.active);
   return (
     <>
       <h1>New package</h1>
