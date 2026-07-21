@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContact } from "@/lib/auth/wholesale";
 import { getContactOrder } from "@/lib/services/wholesale";
+import { enabledProviders } from "@/lib/services/payments";
 import { formatMoney } from "@/lib/money";
-import { reorderAction } from "../../actions";
+import { reorderAction, payInvoiceAction } from "../../actions";
 
 const fmtDate = (d: Date) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "long" }).format(d);
@@ -13,15 +14,17 @@ export default async function PortalOrderDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ placed?: string }>;
+  searchParams: Promise<{ placed?: string; paid?: string; err?: string }>;
 }) {
   const contact = await requireContact();
   const { id } = await params;
-  const { placed } = await searchParams;
+  const { placed, paid, err } = await searchParams;
   const order = await getContactOrder(contact.id, id);
   if (!order) notFound();
 
   const balanceCents = Math.max(0, order.totalCents - order.amountPaidCents);
+  const canPay =
+    order.status === "invoiced" && balanceCents > 0 && enabledProviders().length > 0;
 
   return (
     <>
@@ -29,6 +32,16 @@ export default async function PortalOrderDetail({
         <div className="notice ok">
           Thank you! Your order has been placed. Comfort Cross will confirm shipping
           and send an invoice.
+        </div>
+      )}
+      {paid && (
+        <div className="notice ok">
+          Thank you — your payment was received. It may take a moment to reflect below.
+        </div>
+      )}
+      {err === "nopay" && (
+        <div className="notice error">
+          Online payment isn&apos;t available right now. Please contact Comfort Cross.
         </div>
       )}
 
@@ -39,6 +52,28 @@ export default async function PortalOrderDetail({
         </div>
         <span className={`badge ${order.status}`}>{order.status}</span>
       </div>
+
+      {canPay && (
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            borderColor: "var(--brand)",
+          }}
+        >
+          <div>
+            <strong>Balance due: {formatMoney(balanceCents, order.currency)}</strong>
+            <div className="muted small">This order has been invoiced — pay securely online.</div>
+          </div>
+          <form action={payInvoiceAction}>
+            <input type="hidden" name="orderId" value={order.id} />
+            <button type="submit" className="btn">Pay this invoice</button>
+          </form>
+        </div>
+      )}
 
       <div className="card">
         <table className="ws-table">

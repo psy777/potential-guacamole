@@ -37,7 +37,8 @@ export const squareProvider: PaymentProvider = {
   async createPaymentLink(
     order: Order,
     _contact,
-    amountCents: number
+    amountCents: number,
+    successPath?: string
   ): Promise<PaymentLink> {
     const json = await squareFetch("/v2/online-checkout/payment-links", {
       method: "POST",
@@ -53,7 +54,7 @@ export const squareProvider: PaymentProvider = {
           location_id: squareConfig.locationId,
         },
         checkout_options: {
-          redirect_url: `${APP_URL}/orders/${order.id}?paid=1`,
+          redirect_url: `${APP_URL}${successPath ?? `/orders/${order.id}?paid=1`}`,
         },
       }),
     });

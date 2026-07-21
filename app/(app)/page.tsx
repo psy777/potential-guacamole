@@ -50,9 +50,12 @@ export default async function Dashboard() {
       </div>
 
       {/* THE build list: what to make, batched across all active orders. */}
-      <h2>To make</h2>
-      <p className="muted small" style={{ marginTop: "-0.4rem" }}>
-        Total quantity of each item across all open orders — batch these to avoid retooling back and forth.
+      <div className="header-row">
+        <h2 style={{ margin: 0 }}>To make</h2>
+        <Link href="/make/print" className="btn secondary btn-sm">Print to-make list</Link>
+      </div>
+      <p className="muted small" style={{ marginTop: "0.3rem" }}>
+        Quantity of each item + variation across all open orders — batch these to avoid retooling back and forth.
       </p>
       <div className="card">
         {make.length === 0 ? (

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContact, destroyContactSession } from "@/lib/auth/wholesale";
 import { updateContact } from "@/lib/services/contacts";
+import { ensurePaymentLink } from "@/lib/services/payments";
 import {
   addToCart,
   setCartQuantity,
@@ -11,6 +12,7 @@ import {
   clearCart,
   placeOrder,
   reorderIntoCart,
+  getContactOrder,
 } from "@/lib/services/wholesale";
 
 export async function addToCartAction(fd: FormData) {
@@ -84,6 +86,23 @@ export async function updateProfileAction(fd: FormData) {
   });
   revalidatePath("/portal/account");
   redirect("/portal/account?saved=1");
+}
+
+/** Create/return the payment link for an invoiced order and send the customer to it. */
+export async function payInvoiceAction(fd: FormData) {
+  const contact = await requireContact();
+  const orderId = String(fd.get("orderId") || "");
+  const order = await getContactOrder(contact.id, orderId);
+  if (!order) redirect("/portal/orders");
+
+  const balance = order.totalCents - order.amountPaidCents;
+  if (order.status !== "invoiced" || balance <= 0) {
+    redirect(`/portal/orders/${orderId}`);
+  }
+  // After paying, bring the customer back to their portal order (not the Studio).
+  const url = await ensurePaymentLink(order, contact, `/portal/orders/${orderId}?paid=1`);
+  if (!url) redirect(`/portal/orders/${orderId}?err=nopay`);
+  redirect(url);
 }
 
 export async function portalLogoutAction() {

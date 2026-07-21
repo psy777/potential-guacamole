@@ -107,7 +107,13 @@ export async function getDashboard(): Promise<DashboardData> {
   };
 }
 
-/** Aggregate line-item demand across the open orders, grouped by description. */
+/** Just the production "to make" list (open orders) — for the printable view. */
+export async function getMakeList(): Promise<MakeLine[]> {
+  const open = await rowsFor("open");
+  return aggregateMake(open);
+}
+
+/** Aggregate line-item demand across the open orders, grouped by item+variation. */
 async function aggregateMake(open: ScheduleRow[]): Promise<MakeLine[]> {
   if (open.length === 0) return [];
   const orderById = new Map(open.map((o) => [o.id, o]));

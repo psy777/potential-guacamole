@@ -9,11 +9,16 @@ export type PaymentLink = { url: string; providerRef: string };
 export interface PaymentProvider {
   readonly id: "stripe" | "square";
   isConfigured(): boolean;
-  /** Create a hosted checkout/payment link charging `amountCents` (the balance). */
+  /**
+   * Create a hosted checkout/payment link charging `amountCents` (the balance).
+   * `successPath` is where the customer returns after paying (defaults to the
+   * Studio order page; the portal passes its own path).
+   */
   createPaymentLink(
     order: Order,
     contact: Contact | null,
-    amountCents: number
+    amountCents: number,
+    successPath?: string
   ): Promise<PaymentLink>;
   /** Poll the provider and record any payments found against this order. */
   syncOrder(order: Order): Promise<void>;

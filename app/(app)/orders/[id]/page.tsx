@@ -77,6 +77,9 @@ export default async function OrderDetailPage({
           <a href={`/api/orders/${order.id}/invoice`} className="btn secondary btn-sm" target="_blank">
             Download invoice
           </a>
+          <Link href={`/orders/${order.id}/packing`} className="btn secondary btn-sm">
+            Packing list
+          </Link>
           <Link href={`/orders/${order.id}/edit`} className="btn secondary btn-sm">
             Edit
           </Link>

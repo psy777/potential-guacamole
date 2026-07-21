@@ -22,8 +22,11 @@ export const stripeProvider: PaymentProvider = {
   async createPaymentLink(
     order: Order,
     _contact,
-    amountCents: number
+    amountCents: number,
+    successPath?: string
   ): Promise<PaymentLink> {
+    const success = successPath ?? `/orders/${order.id}?paid=1`;
+    const cancel = success.split("?")[0];
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -36,8 +39,8 @@ export const stripeProvider: PaymentProvider = {
           },
         },
       ],
-      success_url: `${APP_URL}/orders/${order.id}?paid=1`,
-      cancel_url: `${APP_URL}/orders/${order.id}`,
+      success_url: `${APP_URL}${success}`,
+      cancel_url: `${APP_URL}${cancel}`,
       metadata: { orderId: order.id, orderNumber: order.number },
     });
 

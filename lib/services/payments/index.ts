@@ -25,7 +25,8 @@ export function enabledProviders(): PaymentProvider[] {
  */
 export async function ensurePaymentLink(
   order: Order,
-  contact: Contact | null
+  contact: Contact | null,
+  successPath?: string
 ): Promise<string | null> {
   // Always charge the outstanding balance, and reuse the stored link only if it
   // was made for exactly this amount — otherwise mint a fresh, correct one.
@@ -37,7 +38,7 @@ export async function ensurePaymentLink(
   const provider = enabledProviders()[0];
   if (!provider) return null;
   try {
-    const { url } = await provider.createPaymentLink(order, contact, balanceCents);
+    const { url } = await provider.createPaymentLink(order, contact, balanceCents, successPath);
     return url || null;
   } catch (err) {
     console.error("[ensurePaymentLink]", (err as Error).message);
