@@ -43,8 +43,12 @@ export const squareProvider: PaymentProvider = {
     const json = await squareFetch("/v2/online-checkout/payment-links", {
       method: "POST",
       body: JSON.stringify({
-        // Amount is in the key so a changed balance mints a NEW link.
-        idempotency_key: `link-${order.id}-${amountCents}`,
+        // Amount AND return path are in the key: a changed balance or a different
+        // return destination (Studio vs portal) mints a distinct link, so each
+        // context sends the payer back to the right place.
+        idempotency_key: `link-${order.id}-${amountCents}${
+          successPath ? "-" + Buffer.from(successPath).toString("base64url").slice(0, 16) : ""
+        }`,
         quick_pay: {
           name: `Order ${order.number}`,
           price_money: {
@@ -54,7 +58,9 @@ export const squareProvider: PaymentProvider = {
           location_id: squareConfig.locationId,
         },
         checkout_options: {
-          redirect_url: `${APP_URL}${successPath ?? `/orders/${order.id}?paid=1`}`,
+          // Default (customer-facing) links return to the public thank-you page;
+          // the portal passes its own path to return there instead.
+          redirect_url: `${APP_URL}${successPath ?? `/pay/thanks?order=${encodeURIComponent(order.number)}`}`,
         },
       }),
     });

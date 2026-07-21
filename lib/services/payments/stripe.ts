@@ -25,8 +25,13 @@ export const stripeProvider: PaymentProvider = {
     amountCents: number,
     successPath?: string
   ): Promise<PaymentLink> {
-    const success = successPath ?? `/orders/${order.id}?paid=1`;
-    const cancel = success.split("?")[0];
+    // Default links are sent to customers (email/PDF/copy-link), so they return
+    // to a public thank-you page — not the auth-gated Studio order page. The
+    // portal passes its own successPath to return there instead.
+    const success = successPath ?? `/pay/thanks?order=${encodeURIComponent(order.number)}`;
+    const cancel = successPath
+      ? successPath.split("?")[0]
+      : `/pay/thanks?order=${encodeURIComponent(order.number)}&status=cancelled`;
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
       line_items: [

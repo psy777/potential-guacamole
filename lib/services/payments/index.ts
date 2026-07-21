@@ -28,11 +28,13 @@ export async function ensurePaymentLink(
   contact: Contact | null,
   successPath?: string
 ): Promise<string | null> {
-  // Always charge the outstanding balance, and reuse the stored link only if it
-  // was made for exactly this amount — otherwise mint a fresh, correct one.
+  // Always charge the outstanding balance. Reuse the stored link only for the
+  // default (Studio) context and only if the amount still matches. When a
+  // specific return path is requested (e.g. the wholesale portal), always mint a
+  // link that returns THERE — the cached one may point back at the Studio.
   const balanceCents = order.totalCents - order.amountPaidCents;
   if (balanceCents <= 0) return null;
-  if (order.paymentLinkUrl && order.paymentLinkAmountCents === balanceCents) {
+  if (!successPath && order.paymentLinkUrl && order.paymentLinkAmountCents === balanceCents) {
     return order.paymentLinkUrl;
   }
   const provider = enabledProviders()[0];
