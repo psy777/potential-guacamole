@@ -2,9 +2,19 @@ import { desc, eq, like, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { contacts, type Contact } from "@/lib/db/schema";
 
+// The editable contact fields on the normal contact form. Portal-access fields
+// (portalEnabled, passwordHash, wholesaleDiscountPercent) are managed separately
+// via the portal-access controls, not this form.
 export type ContactInput = Omit<
   Contact,
-  "id" | "createdAt" | "updatedAt" | "stripeCustomerId" | "squareCustomerId"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "stripeCustomerId"
+  | "squareCustomerId"
+  | "portalEnabled"
+  | "passwordHash"
+  | "wholesaleDiscountPercent"
 >;
 
 export async function listContacts(search?: string): Promise<Contact[]> {

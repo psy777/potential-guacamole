@@ -93,7 +93,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // One incrementing sequence feeds BOTH the internal order number (ORD-N) and
 // the customer-facing invoice ID, so they always share the same number.
-async function nextSeq(tx: Tx): Promise<number> {
+export async function nextSeq(tx: Tx): Promise<number> {
   await tx
     .insert(counters)
     .values({ name: "order", value: 1000 })

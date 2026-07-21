@@ -9,7 +9,7 @@ import { recordAudit } from "@/lib/audit";
 export async function updateSettingsAction(fd: FormData) {
   const user = await requireUser();
   const s = (k: string) => String(fd.get(k) || "").trim();
-  updateSettings({
+  await updateSettings({
     businessName: s("businessName") || "My Business",
     businessEmail: s("businessEmail"),
     businessPhone: s("businessPhone"),
@@ -18,6 +18,10 @@ export async function updateSettingsAction(fd: FormData) {
     brandColor: s("brandColor") || "#c0392b",
     defaultCurrency: (s("defaultCurrency") || "USD").toUpperCase(),
     processingFeePercent: Math.max(0, Number(fd.get("processingFeePercent")) || 0),
+    wholesaleDiscountPercent: Math.max(
+      0,
+      Math.min(100, Number(fd.get("wholesaleDiscountPercent")) || 0)
+    ),
   });
   await recordAudit({
     userId: user.id,

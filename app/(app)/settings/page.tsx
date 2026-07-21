@@ -105,6 +105,20 @@ export default async function SettingsPage({
             style={{ maxWidth: 160 }}
           />
         </div>
+        <div className="field">
+          <label htmlFor="wholesaleDiscountPercent">
+            Default wholesale discount % (portal customers pay this much off retail
+            unless they have their own rate or an item has a set wholesale price)
+          </label>
+          <input
+            id="wholesaleDiscountPercent"
+            name="wholesaleDiscountPercent"
+            inputMode="decimal"
+            defaultValue={String(s.wholesaleDiscountPercent)}
+            placeholder="40"
+            style={{ maxWidth: 160 }}
+          />
+        </div>
         <button type="submit" className="btn">Save settings</button>
       </form>
 

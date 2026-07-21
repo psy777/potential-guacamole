@@ -9,6 +9,7 @@ type Row = {
   sku: string;
   gtin: string;
   price: string;
+  wholesale: string;
   imagePath: string;
   skuTouched: boolean;
 };
@@ -17,7 +18,7 @@ const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 14);
 
 function blankRow(price = ""): Row {
-  return { name: "", sku: "", gtin: "", price, imagePath: "", skuTouched: false };
+  return { name: "", sku: "", gtin: "", price, wholesale: "", imagePath: "", skuTouched: false };
 }
 
 function initialRows(item?: ItemWithVariations): Row[] {
@@ -28,11 +29,12 @@ function initialRows(item?: ItemWithVariations): Row[] {
           sku: v.sku,
           gtin: v.gtin,
           price: centsToDecimal(v.priceCents),
+          wholesale: v.wholesalePriceCents != null ? centsToDecimal(v.wholesalePriceCents) : "",
           imagePath: v.imagePath,
           skuTouched: true,
         }))
       : item
-      ? [{ name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents), imagePath: "", skuTouched: !!item.sku }]
+      ? [{ name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents), wholesale: "", imagePath: "", skuTouched: !!item.sku }]
       : [];
   rows.push(blankRow()); // always a trailing blank to type into
   return rows;
@@ -173,6 +175,7 @@ export function ItemForm({
               <th>SKU</th>
               <th>Barcode</th>
               <th className="right">Price</th>
+              <th className="right">Wholesale</th>
               <th>Image</th>
               <th></th>
             </tr>
@@ -184,6 +187,7 @@ export function ItemForm({
                 <td><input value={r.sku} onChange={(e) => updateRow(i, { sku: e.target.value, skuTouched: true })} /></td>
                 <td><input value={r.gtin} onChange={(e) => updateRow(i, { gtin: e.target.value })} /></td>
                 <td style={{ width: 100 }}><input className="right" inputMode="decimal" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })} placeholder="0.00" /></td>
+                <td style={{ width: 100 }}><input className="right" inputMode="decimal" value={r.wholesale} onChange={(e) => updateRow(i, { wholesale: e.target.value })} placeholder="auto" title="Explicit wholesale price. Blank = use the discount %." /></td>
                 <td>
                   {r.imagePath ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

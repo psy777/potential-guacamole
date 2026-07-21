@@ -12,6 +12,7 @@ export type ItemVariationInput = {
   sku: string;
   gtin: string;
   priceCents: number;
+  wholesalePriceCents: number | null;
   imagePath: string;
 };
 
@@ -80,7 +81,14 @@ function normalizeVariations(input: ItemVariationInput[]): ItemVariationInput[] 
     .map((v) => ({ ...v, name: v.name.trim() }))
     .filter((v) => v.name || v.priceCents > 0 || v.sku || v.gtin);
   if (cleaned.length === 0) {
-    cleaned.push({ name: "Regular", sku: "", gtin: "", priceCents: 0, imagePath: "" });
+    cleaned.push({
+      name: "Regular",
+      sku: "",
+      gtin: "",
+      priceCents: 0,
+      wholesalePriceCents: null,
+      imagePath: "",
+    });
   }
   return cleaned.map((v) => ({ ...v, name: v.name || "Regular" }));
 }
@@ -117,6 +125,7 @@ export async function createItem(input: ItemInput): Promise<ItemWithVariations> 
               sku: v.sku,
               gtin: v.gtin,
               priceCents: v.priceCents,
+              wholesalePriceCents: v.wholesalePriceCents,
               imagePath: v.imagePath,
               position: i,
             })
@@ -163,6 +172,7 @@ export async function updateItem(
               sku: v.sku,
               gtin: v.gtin,
               priceCents: v.priceCents,
+              wholesalePriceCents: v.wholesalePriceCents,
               imagePath: v.imagePath,
               position: i,
             })

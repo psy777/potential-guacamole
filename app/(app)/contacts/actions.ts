@@ -10,6 +10,11 @@ import {
   deleteContact,
   type ContactInput,
 } from "@/lib/services/contacts";
+import {
+  setContactPassword,
+  setContactPortalEnabled,
+  setContactDiscount,
+} from "@/lib/auth/wholesale";
 
 function parse(fd: FormData): ContactInput {
   const s = (k: string) => String(fd.get(k) || "").trim();
@@ -67,7 +72,7 @@ export async function updateContactAction(fd: FormData) {
 export async function deleteContactAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  deleteContact(id);
+  await deleteContact(id);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -77,4 +82,60 @@ export async function deleteContactAction(fd: FormData) {
   });
   revalidatePath("/contacts");
   redirect("/contacts");
+}
+
+// --- Wholesale portal access ---------------------------------------------
+
+export async function setPortalAccessAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("id"));
+  const enabled = fd.get("enabled") === "on";
+  await setContactPortalEnabled(id, enabled);
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "contact.portal_access",
+    entityType: "contact",
+    entityId: id,
+    summary: enabled ? "enabled" : "disabled",
+  });
+  revalidatePath(`/contacts/${id}`);
+  redirect(`/contacts/${id}?msg=${encodeURIComponent(enabled ? "Portal access enabled." : "Portal access disabled.")}`);
+}
+
+export async function setPortalPasswordAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("id"));
+  const password = String(fd.get("password") || "");
+  if (password.length < 8) {
+    redirect(`/contacts/${id}?err=${encodeURIComponent("Password must be at least 8 characters.")}`);
+  }
+  await setContactPassword(id, password);
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "contact.portal_password",
+    entityType: "contact",
+    entityId: id,
+  });
+  revalidatePath(`/contacts/${id}`);
+  redirect(`/contacts/${id}?msg=${encodeURIComponent("Password set — portal access is now active.")}`);
+}
+
+export async function setContactDiscountAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("id"));
+  const raw = String(fd.get("discountPercent") || "").trim();
+  const percent = raw === "" ? null : Number(raw);
+  await setContactDiscount(id, percent);
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "contact.wholesale_discount",
+    entityType: "contact",
+    entityId: id,
+    summary: raw === "" ? "cleared" : `${percent}%`,
+  });
+  revalidatePath(`/contacts/${id}`);
+  redirect(`/contacts/${id}?msg=${encodeURIComponent("Discount updated.")}`);
 }

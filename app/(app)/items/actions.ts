@@ -22,6 +22,7 @@ function parseVariations(fd: FormData): ItemVariationInput[] {
       sku?: string;
       gtin?: string;
       price?: string;
+      wholesale?: string;
       imagePath?: string;
     }>;
     return raw.map((v) => ({
@@ -29,6 +30,8 @@ function parseVariations(fd: FormData): ItemVariationInput[] {
       sku: String(v.sku || "").trim(),
       gtin: String(v.gtin || "").trim(),
       priceCents: dollarsToCents(v.price ?? "0"),
+      wholesalePriceCents:
+        v.wholesale && String(v.wholesale).trim() ? dollarsToCents(v.wholesale) : null,
       imagePath: String(v.imagePath || ""),
     }));
   } catch {
@@ -114,7 +117,7 @@ export async function bulkCreateItemsAction(fd: FormData) {
       active: true,
       imagePath: "",
       variations: [
-        { name: "Regular", sku: "", gtin: "", priceCents: dollarsToCents(pricePart || "0"), imagePath: "" },
+        { name: "Regular", sku: "", gtin: "", priceCents: dollarsToCents(pricePart || "0"), wholesalePriceCents: null, imagePath: "" },
       ],
     });
     created += 1;

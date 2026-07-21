@@ -80,6 +80,9 @@ export const settings = pgTable("settings", {
   defaultCurrency: text("default_currency").notNull().default("USD"),
   // Card-processing surcharge rate passed to customers (e.g. 3.4). 0 = off.
   processingFeePercent: real("processing_fee_percent").notNull().default(0),
+  // Default wholesale-portal discount off MSRP (e.g. 40 = 40% off). A contact
+  // can override this, and a variation's explicit wholesale price overrides both.
+  wholesaleDiscountPercent: real("wholesale_discount_percent").notNull().default(0),
   updatedAt: updatedAt(),
 });
 
@@ -102,11 +105,29 @@ export const contacts = pgTable("contacts", {
   shippingZip: text("shipping_zip").notNull().default(""),
   shippingCountry: text("shipping_country").notNull().default("US"),
   notes: text("notes").notNull().default(""),
+  // --- Wholesale portal access ---
+  // A contact becomes a portal login when portalEnabled is true AND a password
+  // has been set. Their self-serve prices use wholesaleDiscountPercent if set,
+  // otherwise the global default from settings.
+  portalEnabled: boolean("portal_enabled").notNull().default(false),
+  passwordHash: text("password_hash"),
+  wholesaleDiscountPercent: real("wholesale_discount_percent"), // null = use global default
   // External payment-provider customer IDs (populated lazily on first use).
   stripeCustomerId: text("stripe_customer_id"),
   squareCustomerId: text("square_customer_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+});
+
+// Wholesale-portal sessions — separate from `sessions` (internal users) so a
+// customer login can never reach the internal Studio and vice-versa.
+export const contactSessions = pgTable("contact_sessions", {
+  id: text("id").primaryKey(), // random opaque token, stored in the cookie
+  contactId: text("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+  createdAt: createdAt(),
 });
 
 // --- Catalog: items & packages -------------------------------------------
@@ -145,7 +166,10 @@ export const itemVariations = pgTable(
     name: text("name").notNull().default("Regular"),
     sku: text("sku").notNull().default(""),
     gtin: text("gtin").notNull().default(""), // barcode
-    priceCents: integer("price_cents").notNull().default(0),
+    priceCents: integer("price_cents").notNull().default(0), // MSRP / retail
+    // Explicit wholesale price. When set, it OVERRIDES the percentage discount
+    // for this variation. Null = fall back to MSRP minus the discount %.
+    wholesalePriceCents: integer("wholesale_price_cents"),
     position: integer("position").notNull().default(0),
     active: boolean("active").notNull().default(true),
     imagePath: text("image_path").notNull().default(""),
@@ -369,6 +393,32 @@ export const counters = pgTable("counters", {
   value: integer("value").notNull().default(0),
 });
 
+// --- Wholesale portal cart (one open cart per contact) --------------------
+// A persistent, server-side cart so a customer can build an order across
+// visits without stuffing it into a size-limited cookie.
+export const wholesaleCartItems = pgTable(
+  "wholesale_cart_items",
+  {
+    id: id(),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    variationId: text("variation_id").references(() => itemVariations.id, {
+      onDelete: "cascade",
+    }),
+    quantity: integer("quantity").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("wholesale_cart_contact_idx").on(t.contactId),
+    // One row per (contact, variation) — adding again bumps quantity.
+    unique("wholesale_cart_uq").on(t.contactId, t.variationId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Item = typeof items.$inferSelect;
@@ -380,3 +430,5 @@ export type Payment = typeof payments.$inferSelect;
 export type DocumentRow = typeof documents.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
+export type ContactSession = typeof contactSessions.$inferSelect;
+export type WholesaleCartItem = typeof wholesaleCartItems.$inferSelect;

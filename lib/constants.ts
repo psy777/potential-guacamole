@@ -1,11 +1,19 @@
 // Small, dependency-free constants that are safe to import from anywhere,
 // including the Edge middleware (which cannot load native modules like the DB).
 
-export const SESSION_COOKIE = "fc_session";
+export const SESSION_COOKIE = "fc_session"; // internal Studio users
+export const WHOLESALE_COOKIE = "cc_wholesale"; // wholesale-portal contacts
 
-// Routes that do NOT require a logged-in user.
+// Routes that do NOT require a logged-in internal user.
 export const PUBLIC_PATHS = ["/login", "/setup"];
 
-// Path prefixes that bypass auth entirely (webhooks are authenticated by
-// provider signatures, not by our session cookie).
-export const PUBLIC_PREFIXES = ["/api/webhooks/"];
+// Path prefixes that bypass INTERNAL auth entirely (webhooks are authenticated
+// by provider signatures; the portal has its own separate auth check).
+export const PUBLIC_PREFIXES = ["/api/webhooks/", "/portal"];
+
+// The wholesale portal path space + its one public (unauthenticated) route.
+export const PORTAL_PREFIX = "/portal";
+export const PORTAL_LOGIN = "/portal/login";
+
+// Hostname label that maps to the wholesale portal (e.g. wholesale.firecoast.net).
+export const WHOLESALE_SUBDOMAIN = "wholesale";

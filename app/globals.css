@@ -250,3 +250,63 @@ input:focus, select:focus, textarea:focus { outline: 2px solid #cfe0f0; border-c
 .icon-btn:disabled { opacity: 0.3; cursor: default; }
 .summary-box { max-width: 300px; margin-left: auto; margin-top: 0.5rem; }
 .fee-toggle { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; font-size: 0.9rem; padding: 0.6rem 0; }
+
+/* ================= Wholesale portal ================= */
+/* A calmer, heritage-textile identity, scoped so it re-themes the shared
+   .btn / .brand primitives without touching the internal Studio. */
+.portal {
+  --brand: #33564b;        /* evergreen — distinct from the Studio's red */
+  --brand-dark: #26433a;
+  --bg: #f6f4ef;           /* warm oat */
+  --border: #e6e1d6;
+  --surface: #ffffff;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+.portal .card { border-color: var(--border); }
+.portal-nav {
+  background: var(--brand);
+  color: #fff;
+}
+.portal-nav .nav-inner { display: flex; align-items: center; gap: 1.1rem; max-width: var(--content-width); margin: 0 auto; padding: 0 1.25rem; }
+.portal-nav .brand { color: #fff; font-weight: 800; font-size: 1.08rem; letter-spacing: 0.01em; padding: 0.95rem 0; }
+.portal-nav .brand:hover { opacity: 0.9; text-decoration: none; }
+.portal-nav .brand small { display: block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; }
+.portal-nav a.navlink { color: #eaf1ee; padding: 1rem 0.15rem; display: inline-block; font-size: 0.92rem; }
+.portal-nav a.navlink:hover { color: #fff; text-decoration: none; }
+.portal-nav .spacer { margin-left: auto; }
+.portal-nav .who { color: #cbdcd5; font-size: 0.82rem; }
+.portal-nav .cartlink { position: relative; font-weight: 600; }
+.portal-nav .cartlink .cart-badge {
+  background: #fff; color: var(--brand); border-radius: 999px; font-size: 0.7rem; font-weight: 800;
+  padding: 0.05rem 0.4rem; margin-left: 0.3rem;
+}
+.portal-hero { padding: 1.5rem 0 0.5rem; }
+.portal-hero h1 { font-size: 1.5rem; margin: 0 0 0.2rem; }
+.portal-hero p { color: var(--muted); margin: 0; }
+
+/* Catalog */
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem; }
+.cat-card { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.cat-thumb { aspect-ratio: 4 / 3; background: #efece4 center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: #b7ae9c; font-size: 1.6rem; }
+.cat-body { padding: 0.85rem 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.55rem; flex: 1; }
+.cat-name { font-weight: 700; line-height: 1.25; }
+.cat-cat { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.cat-var { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.cat-var:first-of-type { border-top: none; padding-top: 0; }
+.cat-var .v-name { font-size: 0.86rem; }
+.cat-var .v-price { text-align: right; }
+.cat-var .v-ws { font-weight: 700; }
+.cat-var .v-msrp { font-size: 0.72rem; color: var(--muted); text-decoration: line-through; }
+.add-row { display: flex; gap: 0.35rem; align-items: center; margin-top: auto; }
+.add-row input { width: 58px; text-align: center; }
+
+/* Cart & order tables */
+.ws-table { width: 100%; border-collapse: collapse; }
+.ws-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+.ws-table td { padding: 0.6rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ws-table td.num, .ws-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ws-total-row td { font-weight: 700; border-bottom: none; padding-top: 0.9rem; }
+.ws-empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+.discount-note { background: #eef4f1; border: 1px solid #d7e4dd; color: #2c4a40; border-radius: var(--radius); padding: 0.6rem 0.85rem; font-size: 0.85rem; }
