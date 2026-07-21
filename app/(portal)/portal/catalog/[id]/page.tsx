@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireContact } from "@/lib/auth/wholesale";
 import { getPortalItem } from "@/lib/services/wholesale";
 import { formatMoney } from "@/lib/money";
+import { ImageGallery } from "@/components/image-gallery";
 import { addToCartAction } from "../../actions";
 
 export default async function PortalItemDetail({
@@ -18,6 +19,11 @@ export default async function PortalItemDetail({
   const single =
     item.variations.length === 1 && item.variations[0].variationName === "Regular";
 
+  // The item photo plus any distinct variation photos, in order, de-duplicated.
+  const images = Array.from(
+    new Set([item.imagePath, ...item.variations.map((v) => v.imagePath)].filter(Boolean))
+  );
+
   return (
     <>
       <p style={{ margin: "1rem 0 0.5rem" }}>
@@ -27,14 +33,7 @@ export default async function PortalItemDetail({
       </p>
 
       <div className="item-detail">
-        <div className="item-photo">
-          {item.imagePath ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.imagePath} alt={item.name} />
-          ) : (
-            <div className="item-photo-ph" aria-hidden>✝</div>
-          )}
-        </div>
+        <ImageGallery images={images} alt={item.name} />
 
         <div className="item-info">
           {item.category && <div className="cat-cat">{item.category}</div>}
