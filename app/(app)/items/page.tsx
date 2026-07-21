@@ -22,6 +22,7 @@ export default async function ItemsPage({
               <button type="submit" className="btn secondary">↓ Import from Square</button>
             </form>
           )}
+          <Link href="/items/bulk" className="btn secondary">Bulk add</Link>
           <Link href="/items/new" className="btn">+ New item</Link>
         </div>
       </div>
@@ -57,7 +58,12 @@ export default async function ItemsPage({
                 return (
                   <tr key={it.id}>
                     <td>
-                      <Link href={`/items/${it.id}`}>{it.name}</Link>
+                      <Link href={`/items/${it.id}`} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        {it.imagePath && (
+                          <img src={`/api/uploads/${it.imagePath}`} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                        )}
+                        {it.name}
+                      </Link>
                     </td>
                     <td>{it.category || "—"}</td>
                     <td className="small muted">

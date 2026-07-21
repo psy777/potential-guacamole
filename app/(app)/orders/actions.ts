@@ -117,6 +117,19 @@ export async function setStatusAction(fd: FormData) {
   redirect(`/orders/${id}?msg=${encodeURIComponent(`Status updated to ${status}.`)}`);
 }
 
+export async function syncTrackingAction(fd: FormData) {
+  await requireUser();
+  const id = String(fd.get("id"));
+  try {
+    const { syncOrderTracking } = await import("@/lib/services/shipping/ups");
+    await syncOrderTracking(id);
+  } catch (err) {
+    redirect(`/orders/${id}?err=${encodeURIComponent("UPS sync failed: " + (err as Error).message)}`);
+  }
+  revalidatePath(`/orders/${id}`);
+  redirect(`/orders/${id}?msg=${encodeURIComponent("Tracking refreshed from UPS.")}`);
+}
+
 export async function setTrackingAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));

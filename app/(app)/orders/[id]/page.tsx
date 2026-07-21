@@ -8,10 +8,11 @@ import { StatusBadge, InlineAction } from "@/components/ui";
 import { CopyPaymentLink } from "@/components/copy-payment-link";
 import { EmailComposer } from "@/components/email-composer";
 import { Toast } from "@/components/toast";
-import { docuseal as docusealConfig, email as emailConfig } from "@/lib/config";
+import { docuseal as docusealConfig, email as emailConfig, ups as upsConfig } from "@/lib/config";
 import {
   setStatusAction,
   setTrackingAction,
+  syncTrackingAction,
   manualPaymentAction,
   emailInvoiceAction,
   requestSignatureAction,
@@ -220,17 +221,29 @@ export default async function OrderDetailPage({
                 Track on UPS ↗
               </a>
             )}
+            {order.trackingStatus && (
+              <div className="small muted" style={{ marginTop: "0.35rem" }}>UPS: {order.trackingStatus}</div>
+            )}
+            {upsConfig.isConfigured && order.trackingNumber && (
+              <form action={syncTrackingAction} style={{ marginTop: "0.35rem" }}>
+                <input type="hidden" name="id" value={order.id} />
+                <button type="submit" className="btn ghost btn-sm">Sync from UPS</button>
+              </form>
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid2">
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>Payments</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+            <h2 style={{ margin: 0 }}>Payments</h2>
+            {balanceCents > 0 && providers.length > 0 && <CopyPaymentLink orderId={order.id} />}
+          </div>
           {order.payments.length === 0 ? (
-            <p className="muted">No payments recorded.</p>
+            <p className="muted" style={{ marginTop: "0.9rem" }}>No payments recorded.</p>
           ) : (
-            <table>
+            <table style={{ marginTop: "0.9rem" }}>
               <tbody>
                 {order.payments.map((p) => (
                   <tr key={p.id}>
@@ -247,23 +260,13 @@ export default async function OrderDetailPage({
 
           <div style={{ marginTop: "1rem", paddingTop: "0.9rem", borderTop: "1px solid var(--border)" }}>
             {balanceCents > 0 ? (
-              <>
-                <div className="small" style={{ marginBottom: "0.5rem" }}>
-                  Balance due <strong className="num">{formatMoney(balanceCents, order.currency)}</strong>
-                </div>
-                {providers.length > 0 ? (
-                  <>
-                    <CopyPaymentLink orderId={order.id} />
-                    <p className="small muted" style={{ marginTop: "0.4rem", marginBottom: 0 }}>
-                      Charges the current balance — always up to date. Text it or show it as a QR.
-                    </p>
-                  </>
-                ) : (
-                  <p className="small muted" style={{ margin: 0 }}>
-                    Configure Square or Stripe to collect online (see README).
-                  </p>
+              <div className="small">
+                Balance due{" "}
+                <strong className="num">{formatMoney(balanceCents, order.currency)}</strong>
+                {providers.length === 0 && (
+                  <span className="muted"> · Configure Square or Stripe to collect online (see README).</span>
                 )}
-              </>
+              </div>
             ) : (
               <div className="notice ok" style={{ margin: 0 }}>Paid in full ✓</div>
             )}

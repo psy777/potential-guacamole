@@ -12,6 +12,7 @@ export type ItemVariationInput = {
   sku: string;
   gtin: string;
   priceCents: number;
+  imagePath: string;
 };
 
 export type ItemInput = {
@@ -20,6 +21,7 @@ export type ItemInput = {
   category: string;
   currency: string;
   active: boolean;
+  imagePath: string;
   variations: ItemVariationInput[];
 };
 
@@ -80,7 +82,7 @@ function normalizeVariations(input: ItemVariationInput[]): ItemVariationInput[] 
     .map((v) => ({ ...v, name: v.name.trim() }))
     .filter((v) => v.name || v.priceCents > 0 || v.sku || v.gtin);
   if (cleaned.length === 0) {
-    cleaned.push({ name: "Regular", sku: "", gtin: "", priceCents: 0 });
+    cleaned.push({ name: "Regular", sku: "", gtin: "", priceCents: 0, imagePath: "" });
   }
   return cleaned.map((v) => ({ ...v, name: v.name || "Regular" }));
 }
@@ -97,6 +99,7 @@ export function createItem(input: ItemInput): ItemWithVariations {
         category: input.category,
         currency: input.currency,
         active: input.active,
+        imagePath: input.imagePath,
         sku: base.sku,
         priceCents: base.priceCents,
       })
@@ -110,6 +113,7 @@ export function createItem(input: ItemInput): ItemWithVariations {
           sku: v.sku,
           gtin: v.gtin,
           priceCents: v.priceCents,
+          imagePath: v.imagePath,
           position: i,
         })
         .run();
@@ -132,6 +136,7 @@ export function updateItem(
         category: input.category,
         currency: input.currency,
         active: input.active,
+        imagePath: input.imagePath,
         sku: base.sku,
         priceCents: base.priceCents,
         updatedAt: new Date(),
@@ -147,6 +152,7 @@ export function updateItem(
           sku: v.sku,
           gtin: v.gtin,
           priceCents: v.priceCents,
+          imagePath: v.imagePath,
           position: i,
         })
         .run();

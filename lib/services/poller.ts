@@ -1,6 +1,7 @@
 import { POLL_INTERVAL_MS } from "@/lib/config";
 import { reconcileOpenPayments } from "@/lib/services/payments";
 import { reconcileOpenDocuments } from "@/lib/services/documents/docuseal";
+import { reconcileShipments } from "@/lib/services/shipping/ups";
 
 let started = false;
 
@@ -17,6 +18,7 @@ export function startPoller(): void {
     try {
       await reconcileOpenPayments();
       await reconcileOpenDocuments();
+      await reconcileShipments();
     } catch (err) {
       console.error("[poller] tick failed:", (err as Error).message);
     }

@@ -175,6 +175,20 @@ since it can run on the same machine).
    DocuSeal's webhook settings. (Without a webhook, polling still catches
    completed signatures.)
 
+### UPS — tracking & auto-marking shipped
+
+FireCoast can watch your UPS account, mark orders shipped, and capture tracking numbers.
+
+1. Create an app at <https://developer.ups.com> and get **OAuth client credentials** (Client ID + Secret).
+2. In `.env`:
+   ```
+   UPS_CLIENT_ID=...
+   UPS_CLIENT_SECRET=...
+   UPS_ENVIRONMENT=production   # "test" while validating
+   ```
+3. **Hands-off discovery:** put the **order number** (e.g. `ORD-1042`) or the **invoice ID** (`1042`) into the **reference number** field when you print the UPS label, and enable **Quantum View** on your UPS account. FireCoast polls Quantum View, matches the reference to the order, fills in the tracking number, and marks it **shipped**.
+4. Even without Quantum View, paste a tracking number into an order's **Shipping** card — FireCoast then keeps its delivery status current and auto-marks it shipped once UPS scans it.
+
 ---
 
 ## Security notes

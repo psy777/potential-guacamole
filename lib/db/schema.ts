@@ -120,6 +120,7 @@ export const items = sqliteTable("items", {
   priceCents: integer("price_cents").notNull().default(0),
   currency: text("currency").notNull().default("USD"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  imagePath: text("image_path").notNull().default(""),
   // Links this item to a Square catalog object (set when imported from Square).
   squareCatalogId: text("square_catalog_id"),
   createdAt: createdAt(),
@@ -141,6 +142,7 @@ export const itemVariations = sqliteTable(
     priceCents: integer("price_cents").notNull().default(0),
     position: integer("position").notNull().default(0),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
+    imagePath: text("image_path").notNull().default(""),
     squareVariationId: text("square_variation_id"),
   },
   (t) => [index("item_variations_item_idx").on(t.itemId)]
@@ -210,8 +212,10 @@ export const orders = sqliteTable(
     squareProcessingFeeCents: integer("square_processing_fee_cents"),
     // Optional promised/due date — the axis the production dashboard sorts on.
     dueDate: integer("due_date", { mode: "timestamp_ms" }),
-    // UPS tracking number (entered manually, or filled by the UPS sync).
+    // UPS tracking number (entered manually, or discovered via Quantum View).
     trackingNumber: text("tracking_number").notNull().default(""),
+    // Latest UPS delivery status, e.g. "Picked up", "In transit", "Delivered".
+    trackingStatus: text("tracking_status").notNull().default(""),
     // External references for reconciliation.
     stripeCheckoutId: text("stripe_checkout_id"),
     squarePaymentLinkId: text("square_payment_link_id"),

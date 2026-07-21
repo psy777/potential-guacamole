@@ -4,19 +4,43 @@ import {
   square as squareConfig,
   docuseal as docusealConfig,
   email as emailConfig,
+  ups as upsConfig,
 } from "@/lib/config";
 import { updateSettingsAction } from "./actions";
 
-function IntegrationRow({ name, ok, hint }: { name: string; ok: boolean; hint: string }) {
+function domainLabel(url: string): string {
+  try {
+    return new URL(url).hostname.split(".").slice(-2).join(".");
+  } catch {
+    return url;
+  }
+}
+
+function IntegrationRow({
+  name,
+  purpose,
+  ok,
+  link,
+}: {
+  name: string;
+  purpose: string;
+  ok: boolean;
+  link: string;
+}) {
   return (
     <tr>
       <td><strong>{name}</strong></td>
+      <td className="small muted">{purpose}</td>
       <td>
         <span className={`badge ${ok ? "completed" : "pending"}`}>
           {ok ? "Configured" : "Not configured"}
         </span>
       </td>
-      <td className="small muted">{hint}</td>
+      <td>
+        <a href={link} target="_blank" rel="noopener noreferrer">
+          {domainLabel(link)}
+        </a>
+      </td>
     </tr>
   );
 }
@@ -86,15 +110,21 @@ export default async function SettingsPage({
 
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Integrations</h2>
-        <p className="small muted">
-          API keys live in your <code>.env</code> file, never in the app. See the README for setup.
-        </p>
         <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Purpose</th>
+              <th>Status</th>
+              <th>Link</th>
+            </tr>
+          </thead>
           <tbody>
-            <IntegrationRow name="Resend (email)" ok={emailConfig.isConfigured} hint="RESEND_API_KEY, EMAIL_FROM" />
-            <IntegrationRow name="Stripe" ok={stripeConfig.isConfigured} hint="STRIPE_SECRET_KEY" />
-            <IntegrationRow name="Square" ok={squareConfig.isConfigured} hint="SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID" />
-            <IntegrationRow name="DocuSeal" ok={docusealConfig.isConfigured} hint="DOCUSEAL_API_KEY, DOCUSEAL_TEMPLATE_ID" />
+            <IntegrationRow name="Resend (email)" purpose="Email invoices to customers" ok={emailConfig.isConfigured} link="https://resend.com/docs" />
+            <IntegrationRow name="Stripe" purpose="Card payments via payment link" ok={stripeConfig.isConfigured} link="https://docs.stripe.com/keys" />
+            <IntegrationRow name="Square" purpose="Payments + catalog import" ok={squareConfig.isConfigured} link="https://developer.squareup.com/apps" />
+            <IntegrationRow name="DocuSeal" purpose="E-signatures on orders" ok={docusealConfig.isConfigured} link="https://docs.docuseal.com" />
+            <IntegrationRow name="UPS (tracking)" purpose="Auto-mark shipped + tracking" ok={upsConfig.isConfigured} link="https://developer.ups.com" />
           </tbody>
         </table>
       </div>

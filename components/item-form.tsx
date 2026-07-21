@@ -1,37 +1,50 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { centsToDecimal, dollarsToCents, formatMoney } from "@/lib/money";
 import type { ItemWithVariations } from "@/lib/services/items";
 
-type VariationRow = {
+type Row = {
   name: string;
   sku: string;
   gtin: string;
-  price: string; // dollars, as typed
+  price: string;
+  imagePath: string;
+  skuTouched: boolean;
 };
 
 const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 12);
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 14);
 
-function initialRows(item?: ItemWithVariations): VariationRow[] {
-  if (item && item.variations.length > 0) {
-    return item.variations.map((v) => ({
-      name: v.name,
-      sku: v.sku,
-      gtin: v.gtin,
-      price: centsToDecimal(v.priceCents),
-    }));
-  }
-  if (item) {
-    // Legacy item with no variations — seed one from its base price.
-    return [{ name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents) }];
-  }
-  return [{ name: "Regular", sku: "", gtin: "", price: "" }];
+function blankRow(price = ""): Row {
+  return { name: "", sku: "", gtin: "", price, imagePath: "", skuTouched: false };
+}
+
+function initialRows(item?: ItemWithVariations): Row[] {
+  const rows: Row[] =
+    item && item.variations.length > 0
+      ? item.variations.map((v) => ({
+          name: v.name,
+          sku: v.sku,
+          gtin: v.gtin,
+          price: centsToDecimal(v.priceCents),
+          imagePath: v.imagePath,
+          skuTouched: true,
+        }))
+      : item
+      ? [{ name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents), imagePath: "", skuTouched: !!item.sku }]
+      : [];
+  rows.push(blankRow()); // always a trailing blank to type into
+  return rows;
+}
+
+async function uploadImage(file: File): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/upload", { method: "POST", body: fd });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json.path ?? null;
 }
 
 export function ItemForm({
@@ -43,83 +56,113 @@ export function ItemForm({
   item?: ItemWithVariations;
   categories: string[];
 }) {
-  const [rows, setRows] = useState<VariationRow[]>(initialRows(item));
+  const [name, setName] = useState(item?.name ?? "");
+  const [imagePath, setImagePath] = useState(item?.imagePath ?? "");
+  const [rows, setRows] = useState<Row[]>(initialRows(item));
   const [optionsText, setOptionsText] = useState("");
-  const nameRef = useRef<HTMLInputElement>(null);
 
-  const total = (r: VariationRow) => dollarsToCents(r.price);
+  const autoSku = (varName: string) =>
+    varName.trim() ? `${slug(name) || "item"}-${slug(varName)}`.toUpperCase() : "";
 
-  const update = (i: number, patch: Partial<VariationRow>) =>
+  const updateRow = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  const addRow = () =>
-    setRows((rs) => [...rs, { name: "", sku: "", gtin: "", price: "" }]);
-  const removeRow = (i: number) =>
-    setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
 
-  const autoSku = () => {
-    const base = slug(nameRef.current?.value || "item") || "item";
-    setRows((rs) =>
-      rs.map((r, i) => ({
-        ...r,
-        sku: r.sku || `${base}-${slug(r.name) || i + 1}`.toUpperCase(),
-      }))
-    );
-  };
+  const changeName = (i: number, value: string) =>
+    setRows((rs) => {
+      const next = rs.map((r, idx) =>
+        idx === i ? { ...r, name: value, sku: r.skuTouched ? r.sku : autoSku(value) } : r
+      );
+      // Auto-add a fresh row (inheriting the price) once you type in the last one.
+      if (i === rs.length - 1 && value.trim()) next.push(blankRow(rs[i].price));
+      return next;
+    });
+
+  const removeRow = (i: number) =>
+    setRows((rs) => {
+      const next = rs.filter((_, idx) => idx !== i);
+      if (next.length === 0 || next[next.length - 1].name.trim()) next.push(blankRow());
+      return next;
+    });
+
+  const autoFillSkus = () =>
+    setRows((rs) => rs.map((r) => (r.name.trim() && !r.skuTouched ? { ...r, sku: autoSku(r.name) } : r)));
 
   const generateFromOptions = () => {
-    const values = optionsText
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const values = optionsText.split(",").map((s) => s.trim()).filter(Boolean);
     if (!values.length) return;
+    const carryPrice = rows[rows.length - 1]?.price ?? "";
     setRows((rs) => {
-      // If the only row is the untouched default, replace it.
-      const startFresh =
-        rs.length === 1 && rs[0].name === "Regular" && !rs[0].sku && !rs[0].price;
-      const generated = values.map((name) => ({ name, sku: "", gtin: "", price: "" }));
-      return startFresh ? generated : [...rs, ...generated];
+      const startFresh = rs.length === 1 && !rs[0].name;
+      const generated: Row[] = values.map((v) => ({ ...blankRow(carryPrice), name: v, sku: autoSku(v) }));
+      const kept = startFresh ? [] : rs.filter((r) => r.name.trim());
+      return [...kept, ...generated, blankRow(carryPrice)];
     });
     setOptionsText("");
+  };
+
+  const onVarFile = async (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const p = await uploadImage(f);
+    if (p) updateRow(i, { imagePath: p });
+  };
+  const onItemFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const p = await uploadImage(f);
+    if (p) setImagePath(p);
   };
 
   return (
     <form action={action} className="card">
       {item && <input type="hidden" name="id" value={item.id} />}
       <input type="hidden" name="variations" value={JSON.stringify(rows)} />
+      <input type="hidden" name="imagePath" value={imagePath} />
 
       <div className="grid2">
         <div className="field">
           <label htmlFor="name">Item name *</label>
-          <input id="name" name="name" required ref={nameRef} defaultValue={item?.name ?? ""} />
+          <input id="name" name="name" required value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="category">Category</label>
-          <input id="category" name="category" list="category-list" defaultValue={item?.category ?? ""} placeholder="e.g. Apparel" />
+          <input id="category" name="category" list="category-list" defaultValue={item?.category ?? ""} placeholder="e.g. Standard" />
           <datalist id="category-list">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
+            {categories.map((c) => <option key={c} value={c} />)}
           </datalist>
         </div>
       </div>
-      <div className="field">
-        <label htmlFor="description">Description</label>
-        <textarea id="description" name="description" rows={2} defaultValue={item?.description ?? ""} />
-      </div>
+
       <div className="grid2">
         <div className="field">
-          <label htmlFor="currency">Currency</label>
-          <input id="currency" name="currency" defaultValue={item?.currency ?? "USD"} />
+          <label>Image</label>
+          {imagePath ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <img src={`/api/uploads/${imagePath}`} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+              <button type="button" className="btn ghost btn-sm" onClick={() => setImagePath("")}>Remove</button>
+            </div>
+          ) : (
+            <label className="btn secondary btn-sm" style={{ cursor: "pointer", width: "fit-content" }}>
+              Upload image
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={onItemFile} />
+            </label>
+          )}
         </div>
         <div className="field" style={{ display: "flex", alignItems: "end", gap: "0.4rem" }}>
           <input id="active" name="active" type="checkbox" defaultChecked={item ? item.active : true} style={{ width: "auto" }} />
           <label htmlFor="active" style={{ margin: 0 }}>Active</label>
+          <input type="hidden" name="currency" value={item?.currency ?? "USD"} />
         </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="description">Description</label>
+        <textarea id="description" name="description" rows={2} defaultValue={item?.description ?? ""} />
       </div>
 
       <h2>Variations</h2>
       <p className="small muted" style={{ marginTop: "-0.4rem" }}>
-        Each variation is its own sellable version with its own SKU, barcode, and price.
+        Just start typing — a new row appears automatically, the SKU fills in, and the price carries down.
       </p>
 
       <div style={{ overflowX: "auto" }}>
@@ -128,31 +171,34 @@ export function ItemForm({
             <tr>
               <th>Variation</th>
               <th>SKU</th>
-              <th>Barcode (GTIN)</th>
+              <th>Barcode</th>
               <th className="right">Price</th>
+              <th>Image</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i}>
+                <td><input value={r.name} onChange={(e) => changeName(i, e.target.value)} placeholder={i === rows.length - 1 ? "Type to add…" : "Regular"} /></td>
+                <td><input value={r.sku} onChange={(e) => updateRow(i, { sku: e.target.value, skuTouched: true })} /></td>
+                <td><input value={r.gtin} onChange={(e) => updateRow(i, { gtin: e.target.value })} /></td>
+                <td style={{ width: 100 }}><input className="right" inputMode="decimal" value={r.price} onChange={(e) => updateRow(i, { price: e.target.value })} placeholder="0.00" /></td>
                 <td>
-                  <input value={r.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Regular" />
-                </td>
-                <td>
-                  <input value={r.sku} onChange={(e) => update(i, { sku: e.target.value })} />
-                </td>
-                <td>
-                  <input value={r.gtin} onChange={(e) => update(i, { gtin: e.target.value })} />
-                </td>
-                <td style={{ width: 110 }}>
-                  <input className="right" inputMode="decimal" value={r.price} onChange={(e) => update(i, { price: e.target.value })} placeholder="0.00" />
+                  {r.imagePath ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <img src={`/api/uploads/${r.imagePath}`} alt="" style={{ width: 34, height: 34, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                      <button type="button" className="icon-btn" onClick={() => updateRow(i, { imagePath: "" })}>✕</button>
+                    </div>
+                  ) : (
+                    <label className="btn secondary btn-sm" style={{ cursor: "pointer" }}>
+                      +<input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => onVarFile(i, e)} />
+                    </label>
+                  )}
                 </td>
                 <td className="right small muted num">
-                  {formatMoney(total(r))}
-                  <button type="button" className="btn danger btn-sm" style={{ marginLeft: 6 }} onClick={() => removeRow(i)} disabled={rows.length === 1}>
-                    ✕
-                  </button>
+                  {formatMoney(dollarsToCents(r.price))}
+                  <button type="button" className="icon-btn danger" style={{ marginLeft: 6 }} onClick={() => removeRow(i)} disabled={rows.length === 1}>✕</button>
                 </td>
               </tr>
             ))}
@@ -161,20 +207,9 @@ export function ItemForm({
       </div>
 
       <div className="actions" style={{ marginTop: "0.75rem" }}>
-        <button type="button" className="btn secondary btn-sm" onClick={addRow}>+ Add variation</button>
-        <button type="button" className="btn secondary btn-sm" onClick={autoSku}>Auto-fill SKUs</button>
-      </div>
-
-      <div className="actions" style={{ marginTop: "0.75rem" }}>
-        <input
-          value={optionsText}
-          onChange={(e) => setOptionsText(e.target.value)}
-          placeholder="Generate from options, e.g. Small, Medium, Large"
-          style={{ maxWidth: 320 }}
-        />
-        <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>
-          Generate variations
-        </button>
+        <button type="button" className="btn secondary btn-sm" onClick={autoFillSkus}>Auto-fill SKUs</button>
+        <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder="Generate from options: Small, Medium, Large" style={{ maxWidth: 320 }} />
+        <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>Generate</button>
       </div>
 
       <div className="actions" style={{ marginTop: "1.25rem" }}>

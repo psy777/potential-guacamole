@@ -1,0 +1,1 @@
+ALTER TABLE `orders` ADD `tracking_status` text DEFAULT '' NOT NULL;

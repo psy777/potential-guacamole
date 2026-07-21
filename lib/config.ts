@@ -58,6 +58,22 @@ export const docuseal = {
   },
 };
 
+// --- UPS (tracking + Quantum View shipment discovery) ---
+export const ups = {
+  clientId: process.env.UPS_CLIENT_ID || "",
+  clientSecret: process.env.UPS_CLIENT_SECRET || "",
+  // "test" (wwwcie) while validating, "production" (onlinetools) when live.
+  environment: (process.env.UPS_ENVIRONMENT || "production").toLowerCase(),
+  get apiBase() {
+    return this.environment === "test"
+      ? "https://wwwcie.ups.com"
+      : "https://onlinetools.ups.com";
+  },
+  get isConfigured() {
+    return Boolean(this.clientId && this.clientSecret);
+  },
+};
+
 // Public base URL of THIS app, used to build webhook/return URLs.
 export const APP_URL = process.env.APP_URL || "http://localhost:3000";
 

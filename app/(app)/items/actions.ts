@@ -22,12 +22,14 @@ function parseVariations(fd: FormData): ItemVariationInput[] {
       sku?: string;
       gtin?: string;
       price?: string;
+      imagePath?: string;
     }>;
     return raw.map((v) => ({
       name: String(v.name || "").trim(),
       sku: String(v.sku || "").trim(),
       gtin: String(v.gtin || "").trim(),
       priceCents: dollarsToCents(v.price ?? "0"),
+      imagePath: String(v.imagePath || ""),
     }));
   } catch {
     return [];
@@ -41,6 +43,7 @@ function parse(fd: FormData): ItemInput {
     category: String(fd.get("category") || "").trim(),
     currency: String(fd.get("currency") || "USD").toUpperCase(),
     active: fd.get("active") === "on",
+    imagePath: String(fd.get("imagePath") || ""),
     variations: parseVariations(fd),
   };
 }
@@ -90,6 +93,42 @@ export async function deleteItemAction(fd: FormData) {
   });
   revalidatePath("/items");
   redirect("/items");
+}
+
+export async function bulkCreateItemsAction(fd: FormData) {
+  const user = await requireUser();
+  const lines = String(fd.get("bulk") || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let created = 0;
+  for (const line of lines) {
+    const [namePart, pricePart, catPart] = line.split(",").map((s) => (s ?? "").trim());
+    if (!namePart) continue;
+    createItem({
+      name: namePart,
+      description: "",
+      category: catPart || "",
+      currency: "USD",
+      active: true,
+      imagePath: "",
+      variations: [
+        { name: "Regular", sku: "", gtin: "", priceCents: dollarsToCents(pricePart || "0"), imagePath: "" },
+      ],
+    });
+    created += 1;
+  }
+
+  await recordAudit({
+    userId: user.id,
+    userName: user.name,
+    action: "item.bulk_create",
+    entityType: "item",
+    summary: `${created} items`,
+  });
+  revalidatePath("/items");
+  redirect(`/items?msg=${encodeURIComponent(`Created ${created} item(s).`)}`);
 }
 
 export async function importSquareCatalogAction() {
