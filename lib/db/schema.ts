@@ -397,6 +397,26 @@ export const counters = pgTable("counters", {
   value: integer("value").notNull().default(0),
 });
 
+// Uploaded images live in the database (base64) so they persist on hosts with
+// an ephemeral filesystem (Render) and are served by /api/images/[id].
+export const images = pgTable("images", {
+  id: id(),
+  mimeType: text("mime_type").notNull().default("image/jpeg"),
+  data: text("data").notNull(), // base64-encoded bytes
+  createdAt: createdAt(),
+});
+
+// A reusable library of option sets for building item variations (e.g.
+// "Construction" -> Standard, Rugged, Specialty). Saved once, reused everywhere.
+export const optionSets = pgTable("option_sets", {
+  id: id(),
+  name: text("name").notNull(),
+  // JSON array of value strings, e.g. ["Standard","Rugged","Specialty"].
+  values: text("values").notNull().default("[]"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 // --- Wholesale portal cart (one open cart per contact) --------------------
 // A persistent, server-side cart so a customer can build an order across
 // visits without stuffing it into a size-limited cookie.
@@ -436,3 +456,5 @@ export type Note = typeof notes.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type ContactSession = typeof contactSessions.$inferSelect;
 export type WholesaleCartItem = typeof wholesaleCartItems.$inferSelect;
+export type Image = typeof images.$inferSelect;
+export type OptionSet = typeof optionSets.$inferSelect;

@@ -68,9 +68,14 @@ export default async function Dashboard() {
             </thead>
             <tbody>
               {make.map((m) => (
-                <tr key={m.description}>
+                <tr key={`${m.description}|||${m.variationName}`}>
                   <td>
-                    <div>{m.description}</div>
+                    <div>
+                      {m.description}
+                      {m.variationName && m.variationName !== "Regular" && (
+                        <span className="variation-tag" style={{ marginLeft: "0.4rem" }}>{m.variationName}</span>
+                      )}
+                    </div>
                     <div className="small muted">
                       {m.orders.map((o, i) => (
                         <span key={o.id}>

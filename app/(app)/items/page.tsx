@@ -60,7 +60,7 @@ export default async function ItemsPage({
                     <td>
                       <Link href={`/items/${it.id}`} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                         {it.imagePath && (
-                          <img src={`/api/uploads/${it.imagePath}`} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                          <img src={it.imagePath} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
                         )}
                         {it.name}
                       </Link>

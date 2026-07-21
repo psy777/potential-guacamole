@@ -101,6 +101,50 @@ export async function portalCatalog(contact: Contact): Promise<PortalCatalogItem
   return [...byItem.values()];
 }
 
+/** One active item with its variations, priced for this contact. */
+export async function getPortalItem(
+  contact: Contact,
+  itemId: string
+): Promise<PortalCatalogItem | null> {
+  const discount = await discountFor(contact);
+  const rows = await db
+    .select({ item: items, variation: itemVariations })
+    .from(items)
+    .innerJoin(itemVariations, eq(itemVariations.itemId, items.id))
+    .where(
+      and(
+        eq(items.id, itemId),
+        eq(items.active, true),
+        eq(itemVariations.active, true)
+      )
+    )
+    .orderBy(asc(itemVariations.position));
+  if (rows.length === 0) return null;
+  const item = rows[0].item;
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    category: item.category,
+    imagePath: item.imagePath,
+    variations: rows.map(({ variation }) => ({
+      variationId: variation.id,
+      itemId: item.id,
+      itemName: item.name,
+      variationName: variation.name,
+      sku: variation.sku,
+      imagePath: variation.imagePath || item.imagePath,
+      msrpCents: variation.priceCents,
+      wholesaleCents: wholesaleUnitPriceCents(
+        variation.priceCents,
+        variation.wholesalePriceCents,
+        discount
+      ),
+      explicit: variation.wholesalePriceCents != null,
+    })),
+  };
+}
+
 /** Read the contact's cart, pricing each line at the current wholesale price. */
 export async function getCart(contact: Contact): Promise<CartView> {
   const discount = await discountFor(contact);

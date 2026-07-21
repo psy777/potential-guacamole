@@ -22,6 +22,13 @@
       "when": 1784658938611,
       "tag": "0002_absurd_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784672926996,
+      "tag": "0003_burly_satana",
+      "breakpoints": true
     }
   ]
 }

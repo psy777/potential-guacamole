@@ -8,8 +8,9 @@ export const WHOLESALE_COOKIE = "cc_wholesale"; // wholesale-portal contacts
 export const PUBLIC_PATHS = ["/login", "/setup"];
 
 // Path prefixes that bypass INTERNAL auth entirely (webhooks are authenticated
-// by provider signatures; the portal has its own separate auth check).
-export const PUBLIC_PREFIXES = ["/api/webhooks/", "/portal"];
+// by provider signatures; the portal has its own separate auth check; product
+// images are public so the portal + emails can display them).
+export const PUBLIC_PREFIXES = ["/api/webhooks/", "/api/images/", "/portal"];
 
 // The wholesale portal path space + its public (unauthenticated) routes.
 export const PORTAL_PREFIX = "/portal";

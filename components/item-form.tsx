@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { centsToDecimal, dollarsToCents, formatMoney } from "@/lib/money";
 import type { ItemWithVariations } from "@/lib/services/items";
+import type { OptionSetView } from "@/lib/services/options";
 
 type Row = {
   name: string;
@@ -53,15 +54,19 @@ export function ItemForm({
   action,
   item,
   categories,
+  optionSets = [],
 }: {
   action: (formData: FormData) => Promise<void>;
   item?: ItemWithVariations;
   categories: string[];
+  optionSets?: OptionSetView[];
 }) {
   const [name, setName] = useState(item?.name ?? "");
   const [imagePath, setImagePath] = useState(item?.imagePath ?? "");
   const [rows, setRows] = useState<Row[]>(initialRows(item));
   const [optionsText, setOptionsText] = useState("");
+  const [newSetName, setNewSetName] = useState("");
+  const [sets, setSets] = useState<OptionSetView[]>(optionSets);
 
   const autoSku = (varName: string) =>
     varName.trim() ? `${slug(name) || "item"}-${slug(varName)}`.toUpperCase() : "";
@@ -89,17 +94,45 @@ export function ItemForm({
   const autoFillSkus = () =>
     setRows((rs) => rs.map((r) => (r.name.trim() && !r.skuTouched ? { ...r, sku: autoSku(r.name) } : r)));
 
-  const generateFromOptions = () => {
-    const values = optionsText.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!values.length) return;
+  // Turn a list of option values into variation rows (carrying the last price).
+  const applyValues = (values: string[]) => {
+    const clean = values.map((s) => s.trim()).filter(Boolean);
+    if (!clean.length) return;
     const carryPrice = rows[rows.length - 1]?.price ?? "";
     setRows((rs) => {
       const startFresh = rs.length === 1 && !rs[0].name;
-      const generated: Row[] = values.map((v) => ({ ...blankRow(carryPrice), name: v, sku: autoSku(v) }));
+      const generated: Row[] = clean.map((v) => ({ ...blankRow(carryPrice), name: v, sku: autoSku(v) }));
       const kept = startFresh ? [] : rs.filter((r) => r.name.trim());
       return [...kept, ...generated, blankRow(carryPrice)];
     });
+  };
+
+  const generateFromOptions = () => {
+    applyValues(optionsText.split(","));
     setOptionsText("");
+  };
+
+  // Save the typed options as a reusable, named set AND apply them.
+  const saveAndApply = async () => {
+    const values = optionsText.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!values.length) return;
+    applyValues(values);
+    const setName = newSetName.trim() || "Options";
+    try {
+      const res = await fetch("/api/option-sets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: setName, values }),
+      });
+      if (res.ok) {
+        const saved: OptionSetView = await res.json();
+        setSets((s) => [...s.filter((x) => x.name !== saved.name), saved].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    } catch {
+      // Saving to the library is best-effort; the variations were still applied.
+    }
+    setOptionsText("");
+    setNewSetName("");
   };
 
   const onVarFile = async (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,7 +173,7 @@ export function ItemForm({
           <label>Image</label>
           {imagePath ? (
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <img src={`/api/uploads/${imagePath}`} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+              <img src={imagePath} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
               <button type="button" className="btn ghost btn-sm" onClick={() => setImagePath("")}>Remove</button>
             </div>
           ) : (
@@ -191,7 +224,7 @@ export function ItemForm({
                 <td>
                   {r.imagePath ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <img src={`/api/uploads/${r.imagePath}`} alt="" style={{ width: 34, height: 34, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                      <img src={r.imagePath} alt="" style={{ width: 34, height: 34, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
                       <button type="button" className="icon-btn" onClick={() => updateRow(i, { imagePath: "" })}>✕</button>
                     </div>
                   ) : (
@@ -210,10 +243,52 @@ export function ItemForm({
         </table>
       </div>
 
-      <div className="actions" style={{ marginTop: "0.75rem" }}>
+      <div style={{ marginTop: "0.75rem" }}>
         <button type="button" className="btn secondary btn-sm" onClick={autoFillSkus}>Auto-fill SKUs</button>
-        <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder="Generate from options: Small, Medium, Large" style={{ maxWidth: 320 }} />
-        <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>Generate</button>
+      </div>
+
+      {/* Reusable option sets — saved once, offered on every item. */}
+      <div className="option-library">
+        {sets.length > 0 && (
+          <div className="option-chips">
+            <span className="small muted">Saved options:</span>
+            {sets.map((set) => (
+              <button
+                key={set.id}
+                type="button"
+                className="option-chip"
+                title={`Apply: ${set.values.join(", ")}`}
+                onClick={() => applyValues(set.values)}
+              >
+                {set.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="actions" style={{ marginTop: "0.5rem", flexWrap: "wrap" }}>
+          <input
+            value={newSetName}
+            onChange={(e) => setNewSetName(e.target.value)}
+            placeholder="Set name (e.g. Construction)"
+            style={{ maxWidth: 200 }}
+          />
+          <input
+            value={optionsText}
+            onChange={(e) => setOptionsText(e.target.value)}
+            placeholder="Values: Standard, Rugged, Specialty"
+            style={{ maxWidth: 320 }}
+          />
+          <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>
+            Apply once
+          </button>
+          <button type="button" className="btn btn-sm" onClick={saveAndApply}>
+            Save set &amp; apply
+          </button>
+        </div>
+        <p className="small muted" style={{ marginTop: "0.35rem" }}>
+          &ldquo;Apply once&rdquo; just generates the rows. &ldquo;Save set&rdquo; also stores the
+          option list so you can reuse it on other items.
+        </p>
       </div>
 
       <div className="actions" style={{ marginTop: "1.25rem" }}>

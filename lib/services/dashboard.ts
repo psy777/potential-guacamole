@@ -13,9 +13,10 @@ export type ScheduleRow = Order & {
   balanceCents: number;
 };
 
-/** One row of the "what to make" list — demand for one item, summed across orders. */
+/** One row of the "what to make" list — demand for one item+variation, summed across orders. */
 export type MakeLine = {
   description: string;
+  variationName: string;
   quantity: number;
   orderCount: number;
   earliestDueDate: Date | null;
@@ -124,10 +125,14 @@ async function aggregateMake(open: ScheduleRow[]): Promise<MakeLine[]> {
   for (const l of lines) {
     const order = orderById.get(l.orderId);
     if (!order) continue;
-    const key = l.description.trim() || "(no description)";
+    const description = l.description.trim() || "(no description)";
+    const variationName = l.variationName?.trim() ?? "";
+    // Group by item AND variation so a batch is a real, makeable unit
+    // (e.g. "Blessed Assurance · Rugged"), not a washed-out item total.
+    const key = `${description}|||${variationName}`;
     let entry = map.get(key);
     if (!entry) {
-      entry = { description: key, quantity: 0, orderCount: 0, earliestDueDate: null, orders: [] };
+      entry = { description, variationName, quantity: 0, orderCount: 0, earliestDueDate: null, orders: [] };
       map.set(key, entry);
     }
     entry.quantity += l.quantity;

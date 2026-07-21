@@ -26,7 +26,9 @@ export function PortalNav({
           Cart
           {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
         </Link>
-        <span className="who">{companyName}</span>
+        <Link href="/portal/account" className="navlink who" title="Your profile">
+          {companyName}
+        </Link>
         <form action={portalLogoutAction}>
           <button type="submit" className="navlink" style={{ background: "none", border: "none", cursor: "pointer" }}>
             Log out

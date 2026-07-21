@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContact, destroyContactSession } from "@/lib/auth/wholesale";
+import { updateContact } from "@/lib/services/contacts";
 import {
   addToCart,
   setCartQuantity,
@@ -59,6 +60,30 @@ export async function reorderAction(fd: FormData) {
   const { added, skipped } = await reorderIntoCart(contact.id, orderId);
   revalidatePath("/portal/cart");
   redirect(`/portal/cart?added=${added}&skipped=${skipped}`);
+}
+
+export async function updateProfileAction(fd: FormData) {
+  const contact = await requireContact();
+  const s = (k: string) => String(fd.get(k) || "").trim();
+  // Email is the login identity and is intentionally NOT editable here.
+  // Internal notes are omitted so customers can't see/change them.
+  await updateContact(contact.id, {
+    companyName: s("companyName") || contact.companyName,
+    contactName: s("contactName"),
+    phone: s("phone"),
+    shippingAddress: s("shippingAddress"),
+    shippingCity: s("shippingCity"),
+    shippingState: s("shippingState"),
+    shippingZip: s("shippingZip"),
+    shippingCountry: s("shippingCountry") || "US",
+    billingAddress: s("billingAddress"),
+    billingCity: s("billingCity"),
+    billingState: s("billingState"),
+    billingZip: s("billingZip"),
+    billingCountry: s("billingCountry") || "US",
+  });
+  revalidatePath("/portal/account");
+  redirect("/portal/account?saved=1");
 }
 
 export async function portalLogoutAction() {
