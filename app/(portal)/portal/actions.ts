@@ -21,11 +21,17 @@ export async function addToCartAction(fd: FormData) {
   const variationId = String(fd.get("variationId") || "");
   const quantity = Math.max(1, Number(fd.get("quantity")) || 1);
   const addOnIds = fd.getAll("addOn").map(String).filter(Boolean);
+  let ok = false;
   if (itemId && variationId) {
-    await addToCart(contact.id, itemId, variationId, quantity, addOnIds);
+    ok = await addToCart(contact.id, itemId, variationId, quantity, addOnIds);
   }
   revalidatePath("/portal/catalog");
   revalidatePath("/portal/cart");
+  if (!ok) {
+    // The page was stale (item edited/retired since it loaded) — back to a
+    // fresh catalog, never a crash or a 404.
+    redirect(`/portal/catalog?err=stale`);
+  }
 }
 
 export async function setQtyAction(fd: FormData) {

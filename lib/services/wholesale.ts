@@ -228,6 +228,8 @@ export async function cartCount(contactId: string): Promise<number> {
  * Add a variation (with an optional set of add-ons) to the cart. The same
  * variation with the same add-ons bumps quantity; a different add-on set is a
  * separate line. Add-on ids are validated against the item's offered add-ons.
+ * Returns false when the variation no longer exists (a stale portal page after
+ * the item was edited in the Studio) — callers show a notice, never a crash.
  */
 export async function addToCart(
   contactId: string,
@@ -235,7 +237,26 @@ export async function addToCart(
   variationId: string,
   quantity = 1,
   addOnIds: string[] = []
-): Promise<void> {
+): Promise<boolean> {
+  // Verify the variation still exists, belongs to this item, and is active —
+  // the ids on a rendered page can go stale if the item is edited meanwhile.
+  const variation = (
+    await db
+      .select({ id: itemVariations.id })
+      .from(itemVariations)
+      .innerJoin(items, eq(itemVariations.itemId, items.id))
+      .where(
+        and(
+          eq(itemVariations.id, variationId),
+          eq(itemVariations.itemId, itemId),
+          eq(itemVariations.active, true),
+          eq(items.active, true)
+        )
+      )
+      .limit(1)
+  )[0];
+  if (!variation) return false;
+
   const qty = Math.max(1, Math.round(quantity));
   // Only keep add-ons actually offered on this item.
   const offered = new Set((await itemAddOns_(itemId)).map((a) => a.id));
@@ -251,6 +272,7 @@ export async function addToCart(
       ],
       set: { quantity: sql`${wholesaleCartItems.quantity} + ${qty}` },
     });
+  return true;
 }
 
 /** Set an exact quantity for a cart line (removes it at 0). Scoped to owner. */
@@ -439,8 +461,9 @@ export async function reorderIntoCart(
     }
     // Carry forward the add-ons that still exist (addOnId survives on the snapshot).
     const addOnIds = line.addOns.map((a) => a.addOnId).filter((x): x is string => Boolean(x));
-    await addToCart(contactId, line.itemId, variation.v.id, line.quantity, addOnIds);
-    added++;
+    const ok = await addToCart(contactId, line.itemId, variation.v.id, line.quantity, addOnIds);
+    if (ok) added++;
+    else skipped++;
   }
   return { added, skipped };
 }

@@ -3,8 +3,13 @@ import { requireContact } from "@/lib/auth/wholesale";
 import { portalCatalog } from "@/lib/services/wholesale";
 import { formatMoney } from "@/lib/money";
 
-export default async function CatalogPage() {
+export default async function CatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ err?: string }>;
+}) {
   const contact = await requireContact();
+  const { err } = await searchParams;
   const catalog = await portalCatalog(contact);
 
   return (
@@ -13,6 +18,13 @@ export default async function CatalogPage() {
         <h1>Catalog</h1>
         <p>Prices shown are your wholesale prices. Click an item to see options and order.</p>
       </div>
+
+      {err === "stale" && (
+        <div className="notice error">
+          That item was just updated — here&apos;s the current catalog. Please add it
+          again.
+        </div>
+      )}
 
       {catalog.length === 0 ? (
         <div className="card ws-empty">

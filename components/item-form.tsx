@@ -6,6 +6,7 @@ import type { ItemWithVariations } from "@/lib/services/items";
 import type { AddOnView } from "@/lib/services/addons";
 
 type Row = {
+  id: string | null; // existing variation id — preserved so edits update in place
   name: string;
   sku: string;
   gtin: string;
@@ -19,13 +20,14 @@ const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 14);
 
 function blankRow(price = ""): Row {
-  return { name: "", sku: "", gtin: "", price, wholesale: "", imagePath: "", skuTouched: false };
+  return { id: null, name: "", sku: "", gtin: "", price, wholesale: "", imagePath: "", skuTouched: false };
 }
 
 function initialRows(item?: ItemWithVariations): Row[] {
   const rows: Row[] =
     item && item.variations.length > 0
       ? item.variations.map((v) => ({
+          id: v.id,
           name: v.name,
           sku: v.sku,
           gtin: v.gtin,
@@ -35,7 +37,7 @@ function initialRows(item?: ItemWithVariations): Row[] {
           skuTouched: true,
         }))
       : item
-      ? [{ name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents), wholesale: "", imagePath: "", skuTouched: !!item.sku }]
+      ? [{ id: null, name: "Regular", sku: item.sku, gtin: "", price: centsToDecimal(item.priceCents), wholesale: "", imagePath: "", skuTouched: !!item.sku }]
       : [];
   rows.push(blankRow()); // always a trailing blank to type into
   return rows;

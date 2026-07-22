@@ -10,6 +10,9 @@ import {
 import { itemAddOnIds } from "@/lib/services/addons";
 
 export type ItemVariationInput = {
+  // Existing variation id (present when editing). Update-in-place preserves the
+  // id so cart lines / Square links / open portal pages stay valid.
+  id?: string | null;
   name: string;
   sku: string;
   gtin: string;
@@ -103,6 +106,7 @@ function normalizeVariations(input: ItemVariationInput[]): ItemVariationInput[] 
     .filter((v) => v.name || v.priceCents > 0 || v.sku || v.gtin);
   if (cleaned.length === 0) {
     cleaned.push({
+      id: null,
       name: "Regular",
       sku: "",
       gtin: "",
@@ -180,27 +184,50 @@ export async function updateItem(
         updatedAt: new Date(),
       })
       .where(eq(items.id, id));
-    await tx.delete(itemVariations).where(eq(itemVariations.itemId, id));
+    // Upsert variations IN PLACE (never delete-and-recreate): keeping the same
+    // ids means customer carts, open portal pages, and Square links survive an
+    // item edit. Only variations actually removed from the form are deleted.
+    const existing = await tx
+      .select({ id: itemVariations.id })
+      .from(itemVariations)
+      .where(eq(itemVariations.itemId, id));
+    const existingIds = new Set(existing.map((e) => e.id));
+    const keptIds = new Set(
+      variations.map((v) => v.id).filter((x): x is string => Boolean(x && existingIds.has(x)))
+    );
+    for (const e of existing) {
+      if (!keptIds.has(e.id)) {
+        await tx.delete(itemVariations).where(eq(itemVariations.id, e.id));
+      }
+    }
+
     const created: ItemVariation[] = [];
     for (let i = 0; i < variations.length; i++) {
       const v = variations[i];
-      created.push(
-        (
-          await tx
-            .insert(itemVariations)
-            .values({
-              itemId: id,
-              name: v.name,
-              sku: v.sku,
-              gtin: v.gtin,
-              priceCents: v.priceCents,
-              wholesalePriceCents: v.wholesalePriceCents,
-              imagePath: v.imagePath,
-              position: i,
-            })
-            .returning()
-        )[0]
-      );
+      const values = {
+        name: v.name,
+        sku: v.sku,
+        gtin: v.gtin,
+        priceCents: v.priceCents,
+        wholesalePriceCents: v.wholesalePriceCents,
+        imagePath: v.imagePath,
+        position: i,
+      };
+      if (v.id && keptIds.has(v.id)) {
+        created.push(
+          (
+            await tx
+              .update(itemVariations)
+              .set(values)
+              .where(eq(itemVariations.id, v.id))
+              .returning()
+          )[0]
+        );
+      } else {
+        created.push(
+          (await tx.insert(itemVariations).values({ itemId: id, ...values }).returning())[0]
+        );
+      }
     }
     await writeItemAddOns(tx, id, input.addOnIds);
     const item = (await tx.select().from(items).where(eq(items.id, id)).limit(1))[0];

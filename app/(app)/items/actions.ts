@@ -18,6 +18,7 @@ import { square as squareConfig } from "@/lib/config";
 function parseVariations(fd: FormData): ItemVariationInput[] {
   try {
     const raw = JSON.parse(String(fd.get("variations") || "[]")) as Array<{
+      id?: string | null;
       name?: string;
       sku?: string;
       gtin?: string;
@@ -26,6 +27,7 @@ function parseVariations(fd: FormData): ItemVariationInput[] {
       imagePath?: string;
     }>;
     return raw.map((v) => ({
+      id: v.id || null,
       name: String(v.name || "").trim(),
       sku: String(v.sku || "").trim(),
       gtin: String(v.gtin || "").trim(),
@@ -96,7 +98,7 @@ export async function updateItemAction(fd: FormData) {
 export async function deleteItemAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  deleteItem(id);
+  await deleteItem(id);
   await recordAudit({
     userId: user.id,
     userName: user.name,
