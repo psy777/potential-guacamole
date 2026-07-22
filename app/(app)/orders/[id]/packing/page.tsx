@@ -72,6 +72,9 @@ export default async function PackingListPage({
                 {l.variationName && l.variationName !== "Regular" && (
                   <span className="muted"> · {l.variationName}</span>
                 )}
+                {l.addOns.length > 0 && (
+                  <div className="muted small">+ {l.addOns.map((a) => a.name).join(", ")}</div>
+                )}
               </td>
               <td className="muted small">{l.note}</td>
               <td><span className="tick-box" /></td>

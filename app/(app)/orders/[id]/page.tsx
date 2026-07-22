@@ -83,7 +83,7 @@ export default async function OrderDetailPage({
           <Link href={`/orders/${order.id}/edit`} className="btn secondary btn-sm">
             Edit
           </Link>
-          <InlineAction action={deleteOrderAction} id={order.id} label="Delete" className="btn danger btn-sm" />
+          <InlineAction action={deleteOrderAction} id={order.id} label="Delete" className="btn danger btn-sm" confirmMessage={`Delete order ${order.number}? This can't be undone.`} />
         </div>
       </div>
 
@@ -180,6 +180,11 @@ export default async function OrderDetailPage({
                 <td>
                   {l.description}
                   {l.variationName && <div className="small muted">{l.variationName}</div>}
+                  {l.addOns.length > 0 && (
+                    <div className="small muted">
+                      + {l.addOns.map((a) => `${a.name} (${formatMoney(a.priceCents, order.currency)})`).join(", ")}
+                    </div>
+                  )}
                   {l.note && <div className="small muted" style={{ fontStyle: "italic" }}>{l.note}</div>}
                 </td>
                 <td className="right num">{l.quantity}</td>

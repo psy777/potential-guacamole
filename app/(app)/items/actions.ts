@@ -39,6 +39,15 @@ function parseVariations(fd: FormData): ItemVariationInput[] {
   }
 }
 
+function parseAddOnIds(fd: FormData): string[] {
+  try {
+    const raw = JSON.parse(String(fd.get("addOnIds") || "[]"));
+    return Array.isArray(raw) ? raw.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function parse(fd: FormData): ItemInput {
   return {
     name: String(fd.get("name") || "").trim(),
@@ -48,6 +57,7 @@ function parse(fd: FormData): ItemInput {
     active: fd.get("active") === "on",
     imagePath: String(fd.get("imagePath") || ""),
     variations: parseVariations(fd),
+    addOnIds: parseAddOnIds(fd),
   };
 }
 
@@ -119,6 +129,7 @@ export async function bulkCreateItemsAction(fd: FormData) {
       variations: [
         { name: "Regular", sku: "", gtin: "", priceCents: dollarsToCents(pricePart || "0"), wholesalePriceCents: null, imagePath: "" },
       ],
+      addOnIds: [],
     });
     created += 1;
   }

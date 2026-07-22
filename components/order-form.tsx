@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { dollarsToCents, formatMoney, centsToDecimal } from "@/lib/money";
 import type { FullOrder } from "@/lib/services/orders";
 import type { CatalogGroup, CatalogPick } from "@/lib/services/catalog";
+import type { AddOnView } from "@/lib/services/addons";
 
 type ContactOption = { id: string; companyName: string };
 type Line = {
@@ -14,7 +15,8 @@ type Line = {
   variationName: string;
   note: string;
   quantity: number;
-  unitPrice: string;
+  unitPrice: string; // BASE price; add-ons add on top
+  addOnIds: string[];
 };
 
 const isoDate = (d: Date) => {
@@ -28,6 +30,7 @@ export function OrderForm({
   action,
   contacts,
   groups,
+  itemAddOns,
   order,
   processingFeePercent,
   nextInvoiceId,
@@ -35,21 +38,35 @@ export function OrderForm({
   action: (formData: FormData) => Promise<void>;
   contacts: ContactOption[];
   groups: CatalogGroup[];
+  itemAddOns: Record<string, AddOnView[]>;
   order?: FullOrder;
   processingFeePercent: number;
   nextInvoiceId?: string;
 }) {
   const [lines, setLines] = useState<Line[]>(
-    order?.lines.map((l) => ({
-      itemId: l.itemId,
-      packageId: l.packageId,
-      description: l.description,
-      variationName: l.variationName,
-      note: l.note,
-      quantity: l.quantity,
-      unitPrice: centsToDecimal(l.unitPriceCents),
-    })) ?? []
+    order?.lines.map((l) => {
+      const addOnsTotal = l.addOns.reduce((s, a) => s + a.priceCents, 0);
+      return {
+        itemId: l.itemId,
+        packageId: l.packageId,
+        description: l.description,
+        variationName: l.variationName,
+        note: l.note,
+        quantity: l.quantity,
+        // Stored unit price includes add-ons; show the base in the field.
+        unitPrice: centsToDecimal(l.unitPriceCents - addOnsTotal),
+        addOnIds: l.addOns.map((a) => a.addOnId).filter((x): x is string => Boolean(x)),
+      };
+    }) ?? []
   );
+
+  // Add-ons available on a line's item, and the current per-line surcharge.
+  const lineAddOns = (l: Line): AddOnView[] => (l.itemId ? itemAddOns[l.itemId] ?? [] : []);
+  const lineExtraCents = (l: Line): number =>
+    lineAddOns(l)
+      .filter((a) => l.addOnIds.includes(a.id))
+      .reduce((s, a) => s + a.priceCents, 0);
+  const lineUnitCents = (l: Line): number => dollarsToCents(l.unitPrice) + lineExtraCents(l);
   const [discount, setDiscount] = useState(order ? centsToDecimal(order.discountCents) : "0");
   const [tax, setTax] = useState(order ? centsToDecimal(order.taxCents) : "0");
   const [shipping, setShipping] = useState(order ? centsToDecimal(order.shippingCents) : "0");
@@ -84,7 +101,7 @@ export function OrderForm({
     return allPicks.filter((p) => p.label.toLowerCase().includes(q)).slice(0, 8);
   }, [query, allPicks]);
 
-  const subtotalCents = lines.reduce((s, l) => s + dollarsToCents(l.unitPrice) * l.quantity, 0);
+  const subtotalCents = lines.reduce((s, l) => s + lineUnitCents(l) * l.quantity, 0);
   const preFeeCents = Math.max(
     0,
     subtotalCents - dollarsToCents(discount) + dollarsToCents(tax) + dollarsToCents(shipping)
@@ -97,6 +114,14 @@ export function OrderForm({
 
   const updateLine = (i: number, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const toggleLineAddOn = (i: number, id: string) =>
+    setLines((ls) =>
+      ls.map((l, idx) =>
+        idx === i
+          ? { ...l, addOnIds: l.addOnIds.includes(id) ? l.addOnIds.filter((x) => x !== id) : [...l.addOnIds, id] }
+          : l
+      )
+    );
   const removeLine = (i: number) => setLines((ls) => ls.filter((_, idx) => idx !== i));
   const moveLine = (i: number, dir: -1 | 1) =>
     setLines((ls) => {
@@ -124,6 +149,7 @@ export function OrderForm({
           note: "",
           quantity: 1,
           unitPrice: centsToDecimal(pick.priceCents),
+          addOnIds: [],
         },
       ];
     });
@@ -152,7 +178,7 @@ export function OrderForm({
   const addCustomLine = () =>
     setLines((ls) => [
       ...ls,
-      { itemId: null, packageId: null, description: "", variationName: "", note: "", quantity: 1, unitPrice: "0" },
+      { itemId: null, packageId: null, description: "", variationName: "", note: "", quantity: 1, unitPrice: "0", addOnIds: [] },
     ]);
 
   return (
@@ -256,6 +282,20 @@ export function OrderForm({
                   {l.variationName && (
                     <div><span className="variation-tag">{l.variationName}</span></div>
                   )}
+                  {lineAddOns(l).length > 0 && (
+                    <div className="line-addons">
+                      {lineAddOns(l).map((a) => (
+                        <label key={a.id} className={`line-addon ${l.addOnIds.includes(a.id) ? "on" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={l.addOnIds.includes(a.id)}
+                            onChange={() => toggleLineAddOn(i, a.id)}
+                          />
+                          {a.name} <span className="muted">+{formatMoney(a.priceCents)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                   <input
                     className="line-note"
                     value={l.note}
@@ -283,7 +323,7 @@ export function OrderForm({
                   <input className="right" inputMode="decimal" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} />
                 </td>
                 <td className="right num" style={{ paddingTop: "0.85rem" }}>
-                  {formatMoney(dollarsToCents(l.unitPrice) * l.quantity)}
+                  {formatMoney(lineUnitCents(l) * l.quantity)}
                 </td>
                 <td>
                   <div className="row-actions">

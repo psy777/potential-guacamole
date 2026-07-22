@@ -137,6 +137,11 @@ function InvoiceDoc({
             <View style={styles.colDesc}>
               <Text>{l.description}</Text>
               {l.variationName ? <Text style={styles.lineSub}>{l.variationName}</Text> : null}
+              {l.addOns.length > 0 ? (
+                <Text style={styles.lineSub}>
+                  + {l.addOns.map((a) => `${a.name} (${formatMoney(a.priceCents, order.currency)})`).join(", ")}
+                </Text>
+              ) : null}
               {l.note ? <Text style={styles.lineNote}>{l.note}</Text> : null}
             </View>
             <Text style={styles.colQty}>{l.quantity}</Text>

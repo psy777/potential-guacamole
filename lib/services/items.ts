@@ -3,9 +3,11 @@ import { db } from "@/lib/db";
 import {
   items,
   itemVariations,
+  itemAddOns,
   type Item,
   type ItemVariation,
 } from "@/lib/db/schema";
+import { itemAddOnIds } from "@/lib/services/addons";
 
 export type ItemVariationInput = {
   name: string;
@@ -24,9 +26,13 @@ export type ItemInput = {
   active: boolean;
   imagePath: string;
   variations: ItemVariationInput[];
+  addOnIds: string[];
 };
 
-export type ItemWithVariations = Item & { variations: ItemVariation[] };
+export type ItemWithVariations = Item & {
+  variations: ItemVariation[];
+  addOnIds?: string[]; // populated by getItem (for the editor); omitted in lists
+};
 
 /** Lowest variation price (what the list shows as "starting at"). */
 export function startingPriceCents(item: ItemWithVariations): number {
@@ -73,7 +79,22 @@ export async function listCategories(): Promise<string[]> {
 
 export async function getItem(id: string): Promise<ItemWithVariations | undefined> {
   const item = (await db.select().from(items).where(eq(items.id, id)).limit(1))[0];
-  return item ? withVariations(item) : undefined;
+  if (!item) return undefined;
+  const [withVars, addOnIds] = await Promise.all([withVariations(item), itemAddOnIds(id)]);
+  return { ...withVars, addOnIds };
+}
+
+/** Replace an item's attached add-ons (call inside the create/update tx). */
+async function writeItemAddOns(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  itemId: string,
+  addOnIds: string[]
+): Promise<void> {
+  await tx.delete(itemAddOns).where(eq(itemAddOns.itemId, itemId));
+  const unique = [...new Set(addOnIds.filter(Boolean))];
+  for (const addOnId of unique) {
+    await tx.insert(itemAddOns).values({ itemId, addOnId });
+  }
 }
 
 function normalizeVariations(input: ItemVariationInput[]): ItemVariationInput[] {
@@ -133,7 +154,8 @@ export async function createItem(input: ItemInput): Promise<ItemWithVariations> 
         )[0]
       );
     }
-    return { ...item, variations: created };
+    await writeItemAddOns(tx, item.id, input.addOnIds);
+    return { ...item, variations: created, addOnIds: input.addOnIds };
   });
 }
 
@@ -180,8 +202,9 @@ export async function updateItem(
         )[0]
       );
     }
+    await writeItemAddOns(tx, id, input.addOnIds);
     const item = (await tx.select().from(items).where(eq(items.id, id)).limit(1))[0];
-    return item ? { ...item, variations: created } : undefined;
+    return item ? { ...item, variations: created, addOnIds: input.addOnIds } : undefined;
   });
 }
 

@@ -93,6 +93,11 @@ export default async function PortalOrderDetail({
                   {l.variationName && l.variationName !== "Regular" && (
                     <span className="muted"> · {l.variationName}</span>
                   )}
+                  {l.addOns.length > 0 && (
+                    <div className="muted small">
+                      + {l.addOns.map((a) => `${a.name} (${formatMoney(a.priceCents, order.currency)})`).join(", ")}
+                    </div>
+                  )}
                 </td>
                 <td className="num">{formatMoney(l.unitPriceCents, order.currency)}</td>
                 <td className="num">{l.quantity}</td>

@@ -287,6 +287,22 @@ export const orderLineItems = pgTable(
   (t) => [index("order_line_items_order_idx").on(t.orderId)]
 );
 
+// Add-ons chosen on an order line, snapshotted (name + price) so the record is
+// stable even if the library add-on later changes or is deleted.
+export const orderLineAddOns = pgTable(
+  "order_line_add_ons",
+  {
+    id: id(),
+    orderLineItemId: text("order_line_item_id")
+      .notNull()
+      .references(() => orderLineItems.id, { onDelete: "cascade" }),
+    addOnId: text("add_on_id").references(() => addOns.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    priceCents: integer("price_cents").notNull().default(0),
+  },
+  (t) => [index("order_line_add_ons_line_idx").on(t.orderLineItemId)]
+);
+
 export const orderStatusHistory = pgTable(
   "order_status_history",
   {
@@ -406,16 +422,44 @@ export const images = pgTable("images", {
   createdAt: createdAt(),
 });
 
-// A reusable library of option sets for building item variations (e.g.
-// "Construction" -> Standard, Rugged, Specialty). Saved once, reused everywhere.
+// DEPRECATED — kept only so the migration stays additive (no destructive rename
+// prompt). Unused by the app; safe to drop in a later dedicated migration.
 export const optionSets = pgTable("option_sets", {
   id: id(),
   name: text("name").notNull(),
-  // JSON array of value strings, e.g. ["Standard","Rugged","Specialty"].
   values: text("values").notNull().default("[]"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// A reusable library of priced ADD-ONS — optional extras a customer can add to
+// an item to make it cost more (e.g. "Gift wrap" +$5, "Custom name" +$12).
+// Distinct from variations (which are the forms of the item itself).
+export const addOns = pgTable("add_ons", {
+  id: id(),
+  name: text("name").notNull(),
+  priceCents: integer("price_cents").notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+// Which library add-ons are offered on which item.
+export const itemAddOns = pgTable(
+  "item_add_ons",
+  {
+    id: id(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    addOnId: text("add_on_id")
+      .notNull()
+      .references(() => addOns.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    index("item_add_ons_item_idx").on(t.itemId),
+    unique("item_add_ons_uq").on(t.itemId, t.addOnId),
+  ]
+);
 
 // --- Wholesale portal cart (one open cart per contact) --------------------
 // A persistent, server-side cart so a customer can build an order across
@@ -433,13 +477,16 @@ export const wholesaleCartItems = pgTable(
     variationId: text("variation_id").references(() => itemVariations.id, {
       onDelete: "cascade",
     }),
+    // Sorted JSON array of selected add-on ids. Part of the identity of a cart
+    // line: the same variation with different add-ons is a separate line.
+    addOnIds: text("add_on_ids").notNull().default("[]"),
     quantity: integer("quantity").notNull().default(1),
     createdAt: createdAt(),
   },
   (t) => [
     index("wholesale_cart_contact_idx").on(t.contactId),
-    // One row per (contact, variation) — adding again bumps quantity.
-    unique("wholesale_cart_uq").on(t.contactId, t.variationId),
+    // One row per (contact, variation, add-on set) — re-adding bumps quantity.
+    unique("wholesale_cart_uq").on(t.contactId, t.variationId, t.addOnIds),
   ]
 );
 
@@ -457,4 +504,6 @@ export type Settings = typeof settings.$inferSelect;
 export type ContactSession = typeof contactSessions.$inferSelect;
 export type WholesaleCartItem = typeof wholesaleCartItems.$inferSelect;
 export type Image = typeof images.$inferSelect;
-export type OptionSet = typeof optionSets.$inferSelect;
+export type AddOn = typeof addOns.$inferSelect;
+export type ItemAddOn = typeof itemAddOns.$inferSelect;
+export type OrderLineAddOn = typeof orderLineAddOns.$inferSelect;

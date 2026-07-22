@@ -62,6 +62,11 @@ export default async function CartPage({
                     {l.variationName && l.variationName !== "Regular" && (
                       <span className="muted"> · {l.variationName}</span>
                     )}
+                    {l.addOns.length > 0 && (
+                      <div className="muted small">
+                        + {l.addOns.map((a) => `${a.name} (${formatMoney(a.priceCents)})`).join(", ")}
+                      </div>
+                    )}
                   </td>
                   <td className="num">{formatMoney(l.unitPriceCents)}</td>
                   <td>

@@ -2,6 +2,7 @@ import { listContacts } from "@/lib/services/contacts";
 import { catalogGroups } from "@/lib/services/catalog";
 import { getSettings } from "@/lib/services/settings";
 import { peekNextInvoiceId } from "@/lib/services/orders";
+import { allItemAddOns } from "@/lib/services/addons";
 import { OrderForm } from "@/components/order-form";
 import { createOrderAction } from "../actions";
 
@@ -10,10 +11,11 @@ export default async function NewOrderPage() {
     id: c.id,
     companyName: c.companyName,
   }));
-  const [groups, settings, nextInvoiceId] = await Promise.all([
+  const [groups, settings, nextInvoiceId, itemAddOns] = await Promise.all([
     catalogGroups(),
     getSettings(),
     peekNextInvoiceId(),
+    allItemAddOns(),
   ]);
 
   return (
@@ -23,6 +25,7 @@ export default async function NewOrderPage() {
         action={createOrderAction}
         contacts={contacts}
         groups={groups}
+        itemAddOns={itemAddOns}
         processingFeePercent={settings.processingFeePercent}
         nextInvoiceId={nextInvoiceId}
       />

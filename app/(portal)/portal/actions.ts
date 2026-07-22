@@ -20,8 +20,9 @@ export async function addToCartAction(fd: FormData) {
   const itemId = String(fd.get("itemId") || "");
   const variationId = String(fd.get("variationId") || "");
   const quantity = Math.max(1, Number(fd.get("quantity")) || 1);
+  const addOnIds = fd.getAll("addOn").map(String).filter(Boolean);
   if (itemId && variationId) {
-    await addToCart(contact.id, itemId, variationId, quantity);
+    await addToCart(contact.id, itemId, variationId, quantity, addOnIds);
   }
   revalidatePath("/portal/catalog");
   revalidatePath("/portal/cart");

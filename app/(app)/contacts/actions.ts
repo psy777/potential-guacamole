@@ -71,7 +71,8 @@ export async function updateContactAction(fd: FormData) {
     entityId: id,
   });
   revalidatePath("/contacts");
-  redirect("/contacts");
+  revalidatePath(`/contacts/${id}`);
+  redirect(`/contacts/${id}?msg=${encodeURIComponent("Contact saved.")}`);
 }
 
 export async function deleteContactAction(fd: FormData) {

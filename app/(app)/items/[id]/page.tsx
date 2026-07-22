@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getItem, listCategories } from "@/lib/services/items";
-import { listOptionSets } from "@/lib/services/options";
+import { listAddOns } from "@/lib/services/addons";
 import { ItemForm } from "@/components/item-form";
 import { InlineAction } from "@/components/ui";
 import { updateItemAction, deleteItemAction } from "../actions";
@@ -23,9 +23,10 @@ export default async function EditItemPage({
           id={item.id}
           label="Delete"
           className="btn danger btn-sm"
+          confirmMessage={`Delete "${item.name}"? This can't be undone.`}
         />
       </div>
-      <ItemForm action={updateItemAction} item={item} categories={await listCategories()} optionSets={await listOptionSets()} />
+      <ItemForm action={updateItemAction} item={item} categories={await listCategories()} addOns={await listAddOns()} />
     </>
   );
 }

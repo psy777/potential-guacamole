@@ -17,38 +17,50 @@ import {
   type LineInput,
 } from "@/lib/services/orders";
 import { ensurePaymentLink, enabledProviders } from "@/lib/services/payments";
+import { addOnsByIds } from "@/lib/services/addons";
 import { requestSignature } from "@/lib/services/documents/docuseal";
 import { renderInvoicePdf } from "@/lib/services/pdf/invoice";
 import { getSettings } from "@/lib/services/settings";
 import { sendEmail } from "@/lib/services/email";
 import type { Order } from "@/lib/db/schema";
 
-function parseOrder(fd: FormData): OrderInput {
-  let lines: LineInput[] = [];
+async function parseOrder(fd: FormData): Promise<OrderInput> {
+  let raw: Array<{
+    itemId?: string | null;
+    packageId?: string | null;
+    description?: string;
+    variationName?: string;
+    note?: string;
+    quantity?: number | string;
+    unitPrice?: string;
+    addOnIds?: string[];
+  }> = [];
   try {
-    const raw = JSON.parse(String(fd.get("lines") || "[]")) as Array<{
-      itemId?: string | null;
-      packageId?: string | null;
-      description?: string;
-      variationName?: string;
-      note?: string;
-      quantity?: number | string;
-      unitPrice?: string;
-    }>;
-    lines = raw
-      .filter((l) => (l.description ?? "").trim())
-      .map((l) => ({
-        itemId: l.itemId || null,
-        packageId: l.packageId || null,
-        description: String(l.description).trim(),
-        variationName: String(l.variationName ?? "").trim(),
-        note: String(l.note ?? "").trim(),
-        quantity: Math.max(1, Number(l.quantity) || 1),
-        unitPriceCents: dollarsToCents(l.unitPrice ?? "0"),
-      }));
+    raw = JSON.parse(String(fd.get("lines") || "[]"));
   } catch {
-    lines = [];
+    raw = [];
   }
+  const kept = raw.filter((l) => (l.description ?? "").trim());
+  // Resolve all add-on prices in one batch, then attach to each line.
+  const allIds = kept.flatMap((l) => (Array.isArray(l.addOnIds) ? l.addOnIds.map(String) : []));
+  const priceMap = new Map((await addOnsByIds(allIds)).map((a) => [a.id, a]));
+  const lines: LineInput[] = kept.map((l) => {
+    const ids = Array.isArray(l.addOnIds) ? l.addOnIds.map(String) : [];
+    const addOns = ids
+      .map((id) => priceMap.get(id))
+      .filter((a): a is NonNullable<typeof a> => Boolean(a))
+      .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents }));
+    return {
+      itemId: l.itemId || null,
+      packageId: l.packageId || null,
+      description: String(l.description).trim(),
+      variationName: String(l.variationName ?? "").trim(),
+      note: String(l.note ?? "").trim(),
+      quantity: Math.max(1, Number(l.quantity) || 1),
+      unitPriceCents: dollarsToCents(l.unitPrice ?? "0"),
+      addOns,
+    };
+  });
 
   const dueRaw = String(fd.get("dueDate") || "").trim();
   return {
@@ -69,7 +81,7 @@ function parseOrder(fd: FormData): OrderInput {
 
 export async function createOrderAction(fd: FormData) {
   const user = await requireUser();
-  const id = await createOrder(parseOrder(fd), user);
+  const id = await createOrder(await parseOrder(fd), user);
   await recordAudit({
     userId: user.id,
     userName: user.name,
@@ -84,7 +96,7 @@ export async function createOrderAction(fd: FormData) {
 export async function updateOrderAction(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id"));
-  await updateOrder(id, parseOrder(fd));
+  await updateOrder(id, await parseOrder(fd));
   await recordAudit({
     userId: user.id,
     userName: user.name,

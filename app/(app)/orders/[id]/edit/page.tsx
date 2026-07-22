@@ -3,6 +3,7 @@ import { getOrder } from "@/lib/services/orders";
 import { listContacts } from "@/lib/services/contacts";
 import { catalogGroups } from "@/lib/services/catalog";
 import { getSettings } from "@/lib/services/settings";
+import { allItemAddOns } from "@/lib/services/addons";
 import { OrderForm } from "@/components/order-form";
 import { updateOrderAction } from "../../actions";
 
@@ -19,7 +20,11 @@ export default async function EditOrderPage({
     id: c.id,
     companyName: c.companyName,
   }));
-  const [groups, settings] = await Promise.all([catalogGroups(), getSettings()]);
+  const [groups, settings, itemAddOns] = await Promise.all([
+    catalogGroups(),
+    getSettings(),
+    allItemAddOns(),
+  ]);
 
   return (
     <>
@@ -28,6 +33,7 @@ export default async function EditOrderPage({
         action={updateOrderAction}
         contacts={contacts}
         groups={groups}
+        itemAddOns={itemAddOns}
         order={order}
         processingFeePercent={settings.processingFeePercent}
       />

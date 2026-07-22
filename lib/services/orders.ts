@@ -1,9 +1,10 @@
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/services/settings";
 import {
   orders,
   orderLineItems,
+  orderLineAddOns,
   orderStatusHistory,
   payments,
   documents,
@@ -11,10 +12,13 @@ import {
   counters,
   type Order,
   type OrderLineItem,
+  type OrderLineAddOn,
   type Payment,
   type DocumentRow,
   type Contact,
 } from "@/lib/db/schema";
+
+export type LineAddOn = { id: string; name: string; priceCents: number };
 
 export type LineInput = {
   itemId?: string | null;
@@ -23,8 +27,16 @@ export type LineInput = {
   variationName: string;
   note: string;
   quantity: number;
-  unitPriceCents: number;
+  unitPriceCents: number; // BASE price; add-ons are added on top
+  addOns: LineAddOn[];
 };
+
+/** Effective unit price = base + the sum of the line's add-ons. */
+export function lineUnitCents(l: LineInput): number {
+  return (
+    Math.round(l.unitPriceCents) + l.addOns.reduce((s, a) => s + Math.round(a.priceCents), 0)
+  );
+}
 
 export type OrderInput = {
   contactId?: string | null;
@@ -50,9 +62,11 @@ export type OrderTotals = {
   totalCents: number;
 };
 
+export type FullOrderLine = OrderLineItem & { addOns: OrderLineAddOn[] };
+
 export type FullOrder = Order & {
   contact: Contact | null;
-  lines: OrderLineItem[];
+  lines: FullOrderLine[];
   payments: Payment[];
   documents: DocumentRow[];
   history: (typeof orderStatusHistory.$inferSelect)[];
@@ -68,7 +82,7 @@ export function computeTotals(
   processingFeePercent = 0
 ): OrderTotals {
   const subtotalCents = input.lines.reduce(
-    (sum, l) => sum + Math.round(l.unitPriceCents) * Math.round(l.quantity),
+    (sum, l) => sum + lineUnitCents(l) * Math.round(l.quantity),
     0
   );
   const preFeeCents = Math.max(
@@ -149,14 +163,59 @@ export async function getOrder(id: string): Promise<FullOrder | undefined> {
     db.select().from(orderStatusHistory).where(eq(orderStatusHistory.orderId, id)).orderBy(desc(orderStatusHistory.createdAt)),
   ]);
 
+  const addOnRows = lines.length
+    ? await db
+        .select()
+        .from(orderLineAddOns)
+        .where(inArray(orderLineAddOns.orderLineItemId, lines.map((l) => l.id)))
+    : [];
+
   return {
     ...order,
     contact: contact[0] ?? null,
-    lines,
+    lines: lines.map((l) => ({
+      ...l,
+      addOns: addOnRows.filter((a) => a.orderLineItemId === l.id),
+    })),
     payments: pays,
     documents: docs,
     history,
   };
+}
+
+/** Insert one order line plus its add-on snapshots (used by create & update). */
+async function insertOrderLine(
+  tx: Tx,
+  orderId: string,
+  l: LineInput,
+  position: number
+): Promise<void> {
+  const unit = lineUnitCents(l);
+  const line = (
+    await tx
+      .insert(orderLineItems)
+      .values({
+        orderId,
+        itemId: l.itemId ?? null,
+        packageId: l.packageId ?? null,
+        description: l.description,
+        variationName: l.variationName ?? "",
+        note: l.note ?? "",
+        quantity: Math.round(l.quantity),
+        unitPriceCents: unit, // base + add-ons
+        lineTotalCents: unit * Math.round(l.quantity),
+        position,
+      })
+      .returning()
+  )[0];
+  for (const a of l.addOns) {
+    await tx.insert(orderLineAddOns).values({
+      orderLineItemId: line.id,
+      addOnId: a.id,
+      name: a.name,
+      priceCents: Math.round(a.priceCents),
+    });
+  }
 }
 
 export async function createOrder(
@@ -194,19 +253,7 @@ export async function createOrder(
     )[0];
 
     for (let i = 0; i < input.lines.length; i++) {
-      const l = input.lines[i];
-      await tx.insert(orderLineItems).values({
-        orderId: order.id,
-        itemId: l.itemId ?? null,
-        packageId: l.packageId ?? null,
-        description: l.description,
-        variationName: l.variationName ?? "",
-        note: l.note ?? "",
-        quantity: Math.round(l.quantity),
-        unitPriceCents: Math.round(l.unitPriceCents),
-        lineTotalCents: Math.round(l.unitPriceCents) * Math.round(l.quantity),
-        position: i,
-      });
+      await insertOrderLine(tx, order.id, input.lines[i], i);
     }
 
     await tx.insert(orderStatusHistory).values({
@@ -253,21 +300,10 @@ export async function updateOrder(id: string, input: OrderInput): Promise<void> 
       })
       .where(eq(orders.id, id));
 
+    // Cascade deletes the line's add-on snapshots too.
     await tx.delete(orderLineItems).where(eq(orderLineItems.orderId, id));
     for (let i = 0; i < input.lines.length; i++) {
-      const l = input.lines[i];
-      await tx.insert(orderLineItems).values({
-        orderId: id,
-        itemId: l.itemId ?? null,
-        packageId: l.packageId ?? null,
-        description: l.description,
-        variationName: l.variationName ?? "",
-        note: l.note ?? "",
-        quantity: Math.round(l.quantity),
-        unitPriceCents: Math.round(l.unitPriceCents),
-        lineTotalCents: Math.round(l.unitPriceCents) * Math.round(l.quantity),
-        position: i,
-      });
+      await insertOrderLine(tx, id, input.lines[i], i);
     }
   });
 }

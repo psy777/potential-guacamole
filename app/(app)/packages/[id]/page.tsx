@@ -24,6 +24,7 @@ export default async function EditPackagePage({
           id={pkg.id}
           label="Delete"
           className="btn danger btn-sm"
+          confirmMessage={`Delete package "${pkg.name}"? This can't be undone.`}
         />
       </div>
       <PackageForm action={updatePackageAction} items={items} pkg={pkg} />

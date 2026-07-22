@@ -1,19 +1,35 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   items,
   itemVariations,
   orders,
   orderLineItems,
+  orderLineAddOns,
   orderStatusHistory,
   wholesaleCartItems,
   type Contact,
   type Order,
   type OrderLineItem,
+  type OrderLineAddOn,
 } from "@/lib/db/schema";
 import { getSettings } from "@/lib/services/settings";
 import { nextSeq } from "@/lib/services/orders";
+import { itemAddOns_, addOnsByIds, type AddOnView } from "@/lib/services/addons";
 import { effectiveDiscountPercent, wholesaleUnitPriceCents } from "@/lib/pricing";
+
+/** Canonical key for a set of add-on ids (sorted, de-duped) — cart line identity. */
+function addOnKey(ids: string[]): string {
+  return JSON.stringify([...new Set(ids.filter(Boolean))].sort());
+}
+function parseAddOnKey(key: string): string[] {
+  try {
+    const v = JSON.parse(key);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 export type PortalVariation = {
   variationId: string;
@@ -34,6 +50,7 @@ export type PortalCatalogItem = {
   category: string;
   imagePath: string;
   variations: PortalVariation[];
+  addOns: AddOnView[]; // optional priced extras offered on this item
 };
 
 export type CartLine = {
@@ -43,7 +60,9 @@ export type CartLine = {
   itemName: string;
   variationName: string;
   quantity: number;
-  unitPriceCents: number;
+  baseUnitCents: number; // variation price before add-ons
+  addOns: AddOnView[]; // add-ons on this line
+  unitPriceCents: number; // baseUnit + add-ons
   lineTotalCents: number;
 };
 
@@ -79,6 +98,7 @@ export async function portalCatalog(contact: Contact): Promise<PortalCatalogItem
         category: item.category,
         imagePath: item.imagePath,
         variations: [],
+        addOns: [], // grid doesn't need add-ons; the detail page loads them
       };
       byItem.set(item.id, group);
     }
@@ -121,12 +141,14 @@ export async function getPortalItem(
     .orderBy(asc(itemVariations.position));
   if (rows.length === 0) return null;
   const item = rows[0].item;
+  const addOns = await itemAddOns_(itemId);
   return {
     id: item.id,
     name: item.name,
     description: item.description,
     category: item.category,
     imagePath: item.imagePath,
+    addOns,
     variations: rows.map(({ variation }) => ({
       variationId: variation.id,
       itemId: item.id,
@@ -156,12 +178,20 @@ export async function getCart(contact: Contact): Promise<CartView> {
     .where(eq(wholesaleCartItems.contactId, contact.id))
     .orderBy(asc(items.name), asc(itemVariations.position));
 
+  // Batch-load every add-on referenced across the cart, priced from the library.
+  const allIds = rows.flatMap(({ cart }) => parseAddOnKey(cart.addOnIds));
+  const addOnMap = new Map((await addOnsByIds(allIds)).map((a) => [a.id, a]));
+
   const lines: CartLine[] = rows.map(({ cart, variation, item }) => {
-    const unit = wholesaleUnitPriceCents(
+    const base = wholesaleUnitPriceCents(
       variation.priceCents,
       variation.wholesalePriceCents,
       discount
     );
+    const addOns = parseAddOnKey(cart.addOnIds)
+      .map((id) => addOnMap.get(id))
+      .filter((a): a is AddOnView => Boolean(a));
+    const unit = base + addOns.reduce((s, a) => s + a.priceCents, 0);
     return {
       cartItemId: cart.id,
       itemId: item.id,
@@ -169,6 +199,8 @@ export async function getCart(contact: Contact): Promise<CartView> {
       itemName: item.name,
       variationName: variation.name,
       quantity: cart.quantity,
+      baseUnitCents: base,
+      addOns,
       unitPriceCents: unit,
       lineTotalCents: unit * cart.quantity,
     };
@@ -192,19 +224,31 @@ export async function cartCount(contactId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-/** Add a variation to the cart (or bump its quantity if already present). */
+/**
+ * Add a variation (with an optional set of add-ons) to the cart. The same
+ * variation with the same add-ons bumps quantity; a different add-on set is a
+ * separate line. Add-on ids are validated against the item's offered add-ons.
+ */
 export async function addToCart(
   contactId: string,
   itemId: string,
   variationId: string,
-  quantity = 1
+  quantity = 1,
+  addOnIds: string[] = []
 ): Promise<void> {
   const qty = Math.max(1, Math.round(quantity));
+  // Only keep add-ons actually offered on this item.
+  const offered = new Set((await itemAddOns_(itemId)).map((a) => a.id));
+  const key = addOnKey(addOnIds.filter((id) => offered.has(id)));
   await db
     .insert(wholesaleCartItems)
-    .values({ contactId, itemId, variationId, quantity: qty })
+    .values({ contactId, itemId, variationId, addOnIds: key, quantity: qty })
     .onConflictDoUpdate({
-      target: [wholesaleCartItems.contactId, wholesaleCartItems.variationId],
+      target: [
+        wholesaleCartItems.contactId,
+        wholesaleCartItems.variationId,
+        wholesaleCartItems.addOnIds,
+      ],
       set: { quantity: sql`${wholesaleCartItems.quantity} + ${qty}` },
     });
 }
@@ -273,16 +317,29 @@ export async function placeOrder(contact: Contact): Promise<string | null> {
 
     for (let i = 0; i < cart.lines.length; i++) {
       const l = cart.lines[i];
-      await tx.insert(orderLineItems).values({
-        orderId: order.id,
-        itemId: l.itemId,
-        description: l.itemName,
-        variationName: l.variationName,
-        quantity: l.quantity,
-        unitPriceCents: l.unitPriceCents,
-        lineTotalCents: l.lineTotalCents,
-        position: i,
-      });
+      const line = (
+        await tx
+          .insert(orderLineItems)
+          .values({
+            orderId: order.id,
+            itemId: l.itemId,
+            description: l.itemName,
+            variationName: l.variationName,
+            quantity: l.quantity,
+            unitPriceCents: l.unitPriceCents, // already includes add-ons
+            lineTotalCents: l.lineTotalCents,
+            position: i,
+          })
+          .returning()
+      )[0];
+      for (const a of l.addOns) {
+        await tx.insert(orderLineAddOns).values({
+          orderLineItemId: line.id,
+          addOnId: a.id,
+          name: a.name,
+          priceCents: a.priceCents,
+        });
+      }
     }
 
     await tx.insert(orderStatusHistory).values({
@@ -307,10 +364,12 @@ export async function listContactOrders(contactId: string): Promise<Order[]> {
     .orderBy(desc(orders.createdAt));
 }
 
+export type OrderLineWithAddOns = OrderLineItem & { addOns: OrderLineAddOn[] };
+
 export async function getContactOrder(
   contactId: string,
   orderId: string
-): Promise<(Order & { lines: OrderLineItem[] }) | null> {
+): Promise<(Order & { lines: OrderLineWithAddOns[] }) | null> {
   const order = (
     await db
       .select()
@@ -324,7 +383,19 @@ export async function getContactOrder(
     .from(orderLineItems)
     .where(eq(orderLineItems.orderId, orderId))
     .orderBy(asc(orderLineItems.position));
-  return { ...order, lines };
+  const addOnRows = lines.length
+    ? await db
+        .select()
+        .from(orderLineAddOns)
+        .where(inArray(orderLineAddOns.orderLineItemId, lines.map((l) => l.id)))
+    : [];
+  return {
+    ...order,
+    lines: lines.map((l) => ({
+      ...l,
+      addOns: addOnRows.filter((a) => a.orderLineItemId === l.id),
+    })),
+  };
 }
 
 /**
@@ -366,7 +437,9 @@ export async function reorderIntoCart(
       skipped++;
       continue;
     }
-    await addToCart(contactId, line.itemId, variation.v.id, line.quantity);
+    // Carry forward the add-ons that still exist (addOnId survives on the snapshot).
+    const addOnIds = line.addOns.map((a) => a.addOnId).filter((x): x is string => Boolean(x));
+    await addToCart(contactId, line.itemId, variation.v.id, line.quantity, addOnIds);
     added++;
   }
   return { added, skipped };

@@ -328,12 +328,25 @@ input:focus, select:focus, textarea:focus { outline: 2px solid #cfe0f0; border-c
 .ws-total-row td { font-weight: 700; border-bottom: none; padding-top: 0.9rem; }
 .ws-empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
 .discount-note { background: #eef4f1; border: 1px solid #d7e4dd; color: #2c4a40; border-radius: var(--radius); padding: 0.6rem 0.85rem; font-size: 0.85rem; }
+.addon-choices { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.6rem 0.85rem; margin-top: 1rem; }
+.addon-choice { display: flex; align-items: center; gap: 0.5rem; padding: 0.28rem 0; font-weight: 400; cursor: pointer; }
+.addon-choice input { width: auto; }
+.addon-choice .addon-name { flex: 1; }
+.addon-choice .addon-price { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+.addon-choice.on .addon-price { color: var(--brand); }
+.line-addons { display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 0.3rem 0; }
+.line-addon { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); cursor: pointer; font-weight: 400; }
+.line-addon input { width: auto; }
+.line-addon.on { color: var(--text); }
 
-/* Reusable option-set library (item editor) */
-.option-library { margin-top: 0.75rem; border-top: 1px dashed var(--border); padding-top: 0.75rem; }
-.option-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
-.option-chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.82rem; cursor: pointer; color: var(--text); }
-.option-chip:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
+/* Add-ons picker (item editor) */
+.addon-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+.addon-item { display: flex; align-items: center; gap: 0.6rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.7rem; cursor: pointer; font-weight: 400; }
+.addon-item.on { border-color: var(--brand); background: #fbeceb; }
+.addon-item input { width: auto; }
+.addon-item .addon-name { flex: 1; }
+.addon-item .addon-price { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+.addon-item.on .addon-price { color: var(--brand); }
 
 /* Printable sheets (to-make list, packing list) */
 .print-sheet { max-width: 800px; margin: 0 auto; }

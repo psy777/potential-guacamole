@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { centsToDecimal, dollarsToCents, formatMoney } from "@/lib/money";
 import type { ItemWithVariations } from "@/lib/services/items";
-import type { OptionSetView } from "@/lib/services/options";
+import type { AddOnView } from "@/lib/services/addons";
 
 type Row = {
   name: string;
@@ -54,19 +54,22 @@ export function ItemForm({
   action,
   item,
   categories,
-  optionSets = [],
+  addOns = [],
 }: {
   action: (formData: FormData) => Promise<void>;
   item?: ItemWithVariations;
   categories: string[];
-  optionSets?: OptionSetView[];
+  addOns?: AddOnView[];
 }) {
   const [name, setName] = useState(item?.name ?? "");
   const [imagePath, setImagePath] = useState(item?.imagePath ?? "");
   const [rows, setRows] = useState<Row[]>(initialRows(item));
   const [optionsText, setOptionsText] = useState("");
-  const [newSetName, setNewSetName] = useState("");
-  const [sets, setSets] = useState<OptionSetView[]>(optionSets);
+  // Add-ons: the reusable library + which are attached to this item.
+  const [library, setLibrary] = useState<AddOnView[]>(addOns);
+  const [selected, setSelected] = useState<Set<string>>(new Set(item?.addOnIds ?? []));
+  const [newAddOnName, setNewAddOnName] = useState("");
+  const [newAddOnPrice, setNewAddOnPrice] = useState("");
 
   const autoSku = (varName: string) =>
     varName.trim() ? `${slug(name) || "item"}-${slug(varName)}`.toUpperCase() : "";
@@ -112,27 +115,36 @@ export function ItemForm({
     setOptionsText("");
   };
 
-  // Save the typed options as a reusable, named set AND apply them.
-  const saveAndApply = async () => {
-    const values = optionsText.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!values.length) return;
-    applyValues(values);
-    const setName = newSetName.trim() || "Options";
+  // Add-ons: attach/detach a library add-on, or create a new one.
+  const toggleAddOn = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const createNewAddOn = async () => {
+    const nm = newAddOnName.trim();
+    if (!nm) return;
     try {
-      const res = await fetch("/api/option-sets", {
+      const res = await fetch("/api/add-ons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: setName, values }),
+        body: JSON.stringify({ name: nm, price: newAddOnPrice || "0" }),
       });
       if (res.ok) {
-        const saved: OptionSetView = await res.json();
-        setSets((s) => [...s.filter((x) => x.name !== saved.name), saved].sort((a, b) => a.name.localeCompare(b.name)));
+        const created: AddOnView = await res.json();
+        setLibrary((l) =>
+          [...l.filter((x) => x.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        setSelected((s) => new Set(s).add(created.id));
       }
     } catch {
-      // Saving to the library is best-effort; the variations were still applied.
+      // Saving to the library is best-effort.
     }
-    setOptionsText("");
-    setNewSetName("");
+    setNewAddOnName("");
+    setNewAddOnPrice("");
   };
 
   const onVarFile = async (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,6 +164,7 @@ export function ItemForm({
     <form action={action} className="card">
       {item && <input type="hidden" name="id" value={item.id} />}
       <input type="hidden" name="variations" value={JSON.stringify(rows)} />
+      <input type="hidden" name="addOnIds" value={JSON.stringify([...selected])} />
       <input type="hidden" name="imagePath" value={imagePath} />
 
       <div className="grid2">
@@ -243,52 +256,57 @@ export function ItemForm({
         </table>
       </div>
 
-      <div style={{ marginTop: "0.75rem" }}>
+      <div className="actions" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
         <button type="button" className="btn secondary btn-sm" onClick={autoFillSkus}>Auto-fill SKUs</button>
+        <input
+          value={optionsText}
+          onChange={(e) => setOptionsText(e.target.value)}
+          placeholder="Quick-add variations: Standard, Rugged, Specialty"
+          style={{ maxWidth: 320 }}
+        />
+        <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>Add variations</button>
       </div>
 
-      {/* Reusable option sets — saved once, offered on every item. */}
-      <div className="option-library">
-        {sets.length > 0 && (
-          <div className="option-chips">
-            <span className="small muted">Saved options:</span>
-            {sets.map((set) => (
-              <button
-                key={set.id}
-                type="button"
-                className="option-chip"
-                title={`Apply: ${set.values.join(", ")}`}
-                onClick={() => applyValues(set.values)}
-              >
-                {set.name}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="actions" style={{ marginTop: "0.5rem", flexWrap: "wrap" }}>
-          <input
-            value={newSetName}
-            onChange={(e) => setNewSetName(e.target.value)}
-            placeholder="Set name (e.g. Construction)"
-            style={{ maxWidth: 200 }}
-          />
-          <input
-            value={optionsText}
-            onChange={(e) => setOptionsText(e.target.value)}
-            placeholder="Values: Standard, Rugged, Specialty"
-            style={{ maxWidth: 320 }}
-          />
-          <button type="button" className="btn secondary btn-sm" onClick={generateFromOptions}>
-            Apply once
-          </button>
-          <button type="button" className="btn btn-sm" onClick={saveAndApply}>
-            Save set &amp; apply
-          </button>
+      {/* Add-ons — optional priced extras attached to this item. */}
+      <h2 style={{ marginTop: "1.5rem" }}>Add-ons</h2>
+      <p className="small muted" style={{ marginTop: "-0.4rem" }}>
+        Optional extras a customer can add to this item for an additional charge (e.g.
+        gift wrap, custom name). Pick from your saved add-ons or create a new one.
+      </p>
+
+      {library.length > 0 && (
+        <div className="addon-list">
+          {library.map((a) => (
+            <label key={a.id} className={`addon-item ${selected.has(a.id) ? "on" : ""}`}>
+              <input
+                type="checkbox"
+                checked={selected.has(a.id)}
+                onChange={() => toggleAddOn(a.id)}
+              />
+              <span className="addon-name">{a.name}</span>
+              <span className="addon-price">+{formatMoney(a.priceCents)}</span>
+            </label>
+          ))}
         </div>
-        <p className="small muted" style={{ marginTop: "0.35rem" }}>
-          &ldquo;Apply once&rdquo; just generates the rows. &ldquo;Save set&rdquo; also stores the
-          option list so you can reuse it on other items.
-        </p>
+      )}
+
+      <div className="actions" style={{ marginTop: "0.6rem", flexWrap: "wrap" }}>
+        <input
+          value={newAddOnName}
+          onChange={(e) => setNewAddOnName(e.target.value)}
+          placeholder="New add-on name"
+          style={{ maxWidth: 220 }}
+        />
+        <input
+          value={newAddOnPrice}
+          onChange={(e) => setNewAddOnPrice(e.target.value)}
+          inputMode="decimal"
+          placeholder="Price (e.g. 5.00)"
+          style={{ maxWidth: 140 }}
+        />
+        <button type="button" className="btn btn-sm" onClick={createNewAddOn}>
+          Create &amp; attach
+        </button>
       </div>
 
       <div className="actions" style={{ marginTop: "1.25rem" }}>

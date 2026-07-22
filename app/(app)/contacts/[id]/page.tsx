@@ -1,12 +1,13 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContact } from "@/lib/services/contacts";
 import { getSettings } from "@/lib/services/settings";
+import { listContactOrders } from "@/lib/services/wholesale";
 import { APP_URL } from "@/lib/config";
-import { ContactForm } from "@/components/contact-form";
 import { InlineAction } from "@/components/ui";
 import { CopyableLink } from "@/components/copyable-link";
+import { formatMoney } from "@/lib/money";
 import {
-  updateContactAction,
   deleteContactAction,
   setPortalAccessAction,
   setPortalPasswordAction,
@@ -14,7 +15,15 @@ import {
   sendPortalInviteAction,
 } from "../actions";
 
-export default async function EditContactPage({
+const fmtDate = (d: Date) =>
+  new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(d);
+
+function cityLine(city: string, state: string, zip: string) {
+  const cs = [city, state].filter(Boolean).join(", ");
+  return [cs, zip].filter(Boolean).join(" ");
+}
+
+export default async function ContactDetailPage({
   params,
   searchParams,
 }: {
@@ -25,7 +34,7 @@ export default async function EditContactPage({
   const { msg, err } = await searchParams;
   const contact = await getContact(id);
   if (!contact) notFound();
-  const settings = await getSettings();
+  const [settings, orders] = await Promise.all([getSettings(), listContactOrders(id)]);
 
   const hasPassword = Boolean(contact.passwordHash);
   const invitePending = Boolean(
@@ -40,24 +49,80 @@ export default async function EditContactPage({
   const statusLabel = active ? "Active" : invitePending ? "Invited" : "Not set up";
   const statusClass = active ? "paid" : invitePending ? "invoiced" : "draft";
 
+  const shipCity = cityLine(contact.shippingCity, contact.shippingState, contact.shippingZip);
+  const billCity = cityLine(contact.billingCity, contact.billingState, contact.billingZip);
+
   return (
     <>
       <div className="header-row">
-        <h1>Edit contact</h1>
-        <InlineAction
-          action={deleteContactAction}
-          id={contact.id}
-          label="Delete"
-          className="btn danger btn-sm"
-        />
+        <h1>{contact.companyName}</h1>
+        <div className="actions">
+          <Link href={`/contacts/${contact.id}/edit`} className="btn secondary btn-sm">
+            Edit
+          </Link>
+          <InlineAction
+            action={deleteContactAction}
+            id={contact.id}
+            label="Delete"
+            className="btn danger btn-sm"
+            confirmMessage={`Delete ${contact.companyName}? This can't be undone.`}
+          />
+        </div>
       </div>
 
       {msg && <div className="notice ok">{msg}</div>}
       {err && <div className="notice error">{err}</div>}
 
-      <ContactForm action={updateContactAction} contact={contact} />
+      {/* Contact info (read-only) */}
+      <div className="card">
+        <div className="grid3">
+          <div>
+            <div className="cat-cat">Contact</div>
+            <div>{contact.contactName || "—"}</div>
+          </div>
+          <div>
+            <div className="cat-cat">Email</div>
+            <div>{contact.email || "—"}</div>
+          </div>
+          <div>
+            <div className="cat-cat">Phone</div>
+            <div>{contact.phone || "—"}</div>
+          </div>
+        </div>
+        <div className="grid2" style={{ marginTop: "1rem" }}>
+          <div>
+            <div className="cat-cat">Shipping address</div>
+            {contact.shippingAddress || shipCity ? (
+              <div>
+                {contact.shippingAddress && <div>{contact.shippingAddress}</div>}
+                {shipCity && <div>{shipCity}</div>}
+              </div>
+            ) : (
+              <div className="muted">—</div>
+            )}
+          </div>
+          <div>
+            <div className="cat-cat">Billing address</div>
+            {contact.billingAddress || billCity ? (
+              <div>
+                {contact.billingAddress && <div>{contact.billingAddress}</div>}
+                {billCity && <div>{billCity}</div>}
+              </div>
+            ) : (
+              <div className="muted">—</div>
+            )}
+          </div>
+        </div>
+        {contact.notes && (
+          <div style={{ marginTop: "1rem" }}>
+            <div className="cat-cat">Notes</div>
+            <div>{contact.notes}</div>
+          </div>
+        )}
+      </div>
 
-      <div className="card" style={{ marginTop: "1.5rem" }}>
+      {/* Wholesale portal access management */}
+      <div className="card" style={{ marginTop: "1.25rem" }}>
         <div className="header-row">
           <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Wholesale portal access</h2>
           <span className={`badge ${statusClass}`}>{statusLabel}</span>
@@ -68,7 +133,6 @@ export default async function EditContactPage({
           <strong>{contact.email || "(no email set)"}</strong>.
         </p>
 
-        {/* Invitation — the normal way to onboard a customer */}
         <div style={{ margin: "0.75rem 0 1rem" }}>
           <form action={sendPortalInviteAction}>
             <input type="hidden" name="id" value={contact.id} />
@@ -94,23 +158,15 @@ export default async function EditContactPage({
         </div>
 
         <div className="grid2" style={{ marginTop: "0.5rem" }}>
-          {/* Enable / disable */}
           <form action={setPortalAccessAction} className="stack">
             <label className="fee-toggle">
-              <input
-                type="checkbox"
-                name="enabled"
-                defaultChecked={contact.portalEnabled}
-              />
+              <input type="checkbox" name="enabled" defaultChecked={contact.portalEnabled} />
               Portal access enabled
             </label>
             <input type="hidden" name="id" value={contact.id} />
-            <button type="submit" className="btn btn-sm secondary">
-              Save access
-            </button>
+            <button type="submit" className="btn btn-sm secondary">Save access</button>
           </form>
 
-          {/* Set / reset password manually (fallback when email isn't an option) */}
           <form action={setPortalPasswordAction} className="stack">
             <div className="field">
               <label htmlFor="pw">
@@ -125,7 +181,6 @@ export default async function EditContactPage({
           </form>
         </div>
 
-        {/* Discount override */}
         <form action={setContactDiscountAction} className="stack" style={{ marginTop: "1rem", maxWidth: "360px" }}>
           <div className="field">
             <label htmlFor="disc">Wholesale discount override (%)</label>
@@ -145,10 +200,43 @@ export default async function EditContactPage({
             </span>
           </div>
           <input type="hidden" name="id" value={contact.id} />
-          <button type="submit" className="btn btn-sm secondary">
-            Save discount
-          </button>
+          <button type="submit" className="btn btn-sm secondary">Save discount</button>
         </form>
+      </div>
+
+      {/* Order history */}
+      <div className="header-row" style={{ marginTop: "1.5rem" }}>
+        <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Orders</h2>
+      </div>
+      <div className="card">
+        {orders.length === 0 ? (
+          <p className="muted">No orders yet.</p>
+        ) : (
+          <table className="ws-table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th className="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((o) => (
+                <tr key={o.id}>
+                  <td>
+                    <Link href={`/orders/${o.id}`}>{o.number}</Link>
+                  </td>
+                  <td>{fmtDate(o.createdAt)}</td>
+                  <td>
+                    <span className={`badge ${o.status}`}>{o.status}</span>
+                  </td>
+                  <td className="num">{formatMoney(o.totalCents, o.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   );

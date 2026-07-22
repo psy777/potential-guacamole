@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
 import { listNotes } from "@/lib/services/notes";
+import { InlineAction } from "@/components/ui";
 import {
   createNoteAction,
   updateNoteAction,
@@ -51,10 +52,13 @@ export default async function NotesPage() {
                   {n.pinned ? "📌 Unpin" : "Pin"}
                 </button>
               </form>
-              <form action={deleteNoteAction} style={{ display: "inline" }}>
-                <input type="hidden" name="id" value={n.id} />
-                <button type="submit" className="btn danger btn-sm">Delete</button>
-              </form>
+              <InlineAction
+                action={deleteNoteAction}
+                id={n.id}
+                label="Delete"
+                className="btn danger btn-sm"
+                confirmMessage="Delete this note? This can't be undone."
+              />
               <span className="small muted">
                 Updated {new Date(n.updatedAt).toLocaleString("en-US")}
               </span>
